@@ -1,0 +1,17 @@
+{
+  "dependencies": {
+    "commander": "^12.1.0",
+    "temporal-polyfill": "^0.2.5",
+    "tsx": "^4.15.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.2",
+    "prettier": "^3.3.2",
+    "typescript": "^5.4.5"
+  },
+  "scripts": {
+    "start": "tsx ./src/index.ts",
+    "dev": "tsx --watch ./src/index.ts --year 2024",
+    "format": "prettier --write ."
+  }
+}
