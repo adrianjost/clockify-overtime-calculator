@@ -8,6 +8,9 @@ It's important that your time entries include any sick days and vacation days yo
 ## Usage
 
 ```
+# install dependencies
+npm install
+
 # run once
 env CLOCKIFY_API_KEY=YOUR_API_KEY npm run start -- --year 2024
 
