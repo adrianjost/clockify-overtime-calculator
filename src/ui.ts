@@ -35,12 +35,13 @@ export function visualize(
       break;
     }
 
-    const numberOfWorkDays =
-      weekEnd.dayOfYear - weekStart.dayOfYear + 1 - weekendDays.length;
     let totalWorkDuration = Temporal.Duration.from({ hours: 0 });
-
+    let numberOfWorkDays = 0;
     for (let j = 0; j < 7; j++) {
       const day = weekStart.add({ days: j });
+      if (!weekendDays.includes(j + 1) && !isAfter(day, weekEnd)) {
+        numberOfWorkDays += 1;
+      }
       const duration = data.get(day.toString());
       if (duration) {
         totalWorkDuration = totalWorkDuration.add(duration);
