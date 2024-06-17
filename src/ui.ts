@@ -10,7 +10,7 @@ const durationPerWorkday = Temporal.Duration.from({ hours: 8 });
  */
 export function visualize(
   year: number,
-  data: Map<string, Temporal.Duration>,
+  data: Map<string, Temporal.Duration>
 ): void {
   const firstDayOfYear = Temporal.PlainDate.from({ year, month: 1, day: 1 });
   const lastDayOfYear = Temporal.PlainDate.from({ year, month: 12, day: 31 });
@@ -22,7 +22,7 @@ export function visualize(
     const dayOfWeek = firstDayOfYear.add({ weeks: i });
     const weekStart = maxDate(
       dayOfWeek.subtract({ days: dayOfWeek.dayOfWeek - 1 }),
-      firstDayOfYear,
+      firstDayOfYear
     );
     const unlimitedWeekEnd = weekStart.add({ days: 7 - weekStart.dayOfWeek });
     const weekEnd = minDate(unlimitedWeekEnd, today, lastDayOfYear);
@@ -39,7 +39,7 @@ export function visualize(
       weekEnd.dayOfYear - weekStart.dayOfYear + 1 - weekendDays.length;
     let totalWorkDuration = Temporal.Duration.from({ hours: 0 });
 
-    for (let j = 0; j < numberOfWorkDays; j++) {
+    for (let j = 0; j < 7; j++) {
       const day = weekStart.add({ days: j });
       const duration = data.get(day.toString());
       if (duration) {
@@ -62,19 +62,22 @@ export function visualize(
       "\t",
       formatDuration(totalWorkDuration, "hoursMinutes"),
       "\t",
-      formatDuration(overtime, "hoursMinutes"),
+      formatDuration(overtime, "hoursMinutes")
     );
 
-    for (let j = 0; j < numberOfWorkDays; j++) {
+    for (let j = 0; j < 7; j++) {
       const day = weekStart.add({ days: j });
       const duration = data.get(day.toString());
       if (duration) {
-        console.log(
-          "\t",
-          day.toString(),
-          "\t",
-          formatDuration(duration, "hoursMinutes"),
-        );
+        const dayString = `\t${day.toString()}\t${formatDuration(
+          duration,
+          "hoursMinutes"
+        )}`;
+        if (weekendDays.includes(j + 1)) {
+          console.log("\x1b[31m", dayString, "\x1b[0m");
+        } else {
+          console.log(dayString);
+        }
       }
     }
   }
@@ -82,7 +85,7 @@ export function visualize(
   console.log(
     "\x1b[1m",
     "\nTotal Overtime:",
-    formatDuration(totalOvertime, "daysHoursMinutes"),
-    "\x1b[0m",
+    formatDuration(totalOvertime, "hoursMinutes"),
+    "\x1b[0m"
   );
 }
