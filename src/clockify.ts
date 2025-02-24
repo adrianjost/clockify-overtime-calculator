@@ -23,13 +23,13 @@ export const fetchTimeEntries = async (
   workspaceID: string,
   userID: string,
   from: Temporal.PlainDate,
-  to: Temporal.PlainDate,
+  to: Temporal.PlainDate
 ): Promise<Record<string, unknown>[]> => {
   const fromString = new Date(
-    new Date(`${from.toString()}T00:00:00Z`).getTime(),
+    new Date(`${from.toString()}T00:00:00Z`).getTime()
   ).toISOString();
   const toString = new Date(
-    new Date(`${to.toString()}T23:59:59Z`).getTime(),
+    new Date(`${to.toString()}T23:59:59Z`).getTime()
   ).toISOString();
 
   const pageSize = 5000;
@@ -44,7 +44,7 @@ export const fetchTimeEntries = async (
         headers: {
           "X-Api-Key": apiKey,
         },
-      },
+      }
     );
     if (!response.ok) {
       console.log(await response.text());
@@ -66,7 +66,7 @@ export const fetchTimeEntries = async (
 export const fetchYear = async (
   workspaceID: string,
   userID: string,
-  year: number,
+  year: number
 ): Promise<Map<string, Temporal.Duration>> => {
   const firstDayOfYear = Temporal.PlainDate.from({
     year,
@@ -82,13 +82,20 @@ export const fetchYear = async (
     workspaceID,
     userID,
     firstDayOfYear,
-    lastDayOfYear,
+    lastDayOfYear
   );
 
   const durationPerDay = new Map<string, Temporal.Duration>();
   for (const entry of timeEntries as any) {
     const date = Temporal.PlainDate.from(entry.timeInterval.start.slice(0, 10));
-    const duration = Temporal.Duration.from(entry.timeInterval.duration);
+    let duration;
+    if (entry.timeInterval.duration === null) {
+      const start = Temporal.Instant.from(entry.timeInterval.start);
+      const end = Temporal.Now.instant();
+      duration = Temporal.Duration.from({ seconds: end.since(start).seconds });
+    } else {
+      duration = Temporal.Duration.from(entry.timeInterval.duration);
+    }
     const currentDuration =
       durationPerDay.get(date.toString()) ||
       Temporal.Duration.from({ seconds: 0 });
