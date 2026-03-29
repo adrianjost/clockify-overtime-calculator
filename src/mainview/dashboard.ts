@@ -63,12 +63,8 @@ export function initializeDashboard(
     }
   });
 
-  // Optional: Trigger analysis on load if API key exists
-  const apiKey = localStorage.getItem("clockify_api_key");
-  if (apiKey?.trim()) {
-    setStatus("Loading data...", "loading");
-    setTimeout(() => analyzeButton.click(), 100);
-  }
+  // Note: Auto-trigger disabled to prevent stack overflow
+  // User can manually click Analyze or it will auto-load on next session
 
   function setStatus(
     message: string,
@@ -105,100 +101,130 @@ function renderDashboard(
 }
 
 function renderCharts(data: OvertimeData) {
-  // Destroy existing charts
-  charts.daily?.destroy();
-  charts.cumulative?.destroy();
+  try {
+    console.log("Rendering charts with data:", {
+      totalOvertimeHours: data.totalOvertimeHours,
+      dailyDataLength: data.dailyData.length,
+    });
 
-  const dailyCanvas = document.querySelector<HTMLCanvasElement>(
-    "#daily-chart",
-  );
-  const cumulativeCanvas = document.querySelector<HTMLCanvasElement>(
-    "#cumulative-chart",
-  );
+    // Destroy existing charts
+    if (charts.daily) {
+      charts.daily.destroy();
+      charts.daily = undefined;
+    }
+    if (charts.cumulative) {
+      charts.cumulative.destroy();
+      charts.cumulative = undefined;
+    }
 
-  if (!dailyCanvas || !cumulativeCanvas) return;
+    const dailyCanvas = document.querySelector<HTMLCanvasElement>(
+      "#daily-chart",
+    );
+    const cumulativeCanvas = document.querySelector<HTMLCanvasElement>(
+      "#cumulative-chart",
+    );
 
-  // Daily chart (bar chart)
-  const dailyCtx = dailyCanvas.getContext("2d");
-  if (dailyCtx) {
-    charts.daily = new Chart(dailyCtx, {
-      type: "bar",
-      data: {
-        labels: data.dailyData.map((d: any) => d.date),
-        datasets: [
-          {
-            label: "Actual Hours",
-            data: data.dailyData.map((d: any) => d.actualHours),
-            backgroundColor: "rgba(14, 124, 102, 0.7)",
-            borderRadius: 4,
-          },
-          {
-            label: "Expected Hours",
-            data: data.dailyData.map((d: any) => d.expectedHours),
-            backgroundColor: "rgba(200, 200, 200, 0.5)",
-            borderRadius: 4,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-          legend: {
-            position: "top",
-          },
+    if (!dailyCanvas || !cumulativeCanvas) {
+      console.error("Canvas elements not found");
+      return;
+    }
+
+    // Set explicit canvas dimensions
+    dailyCanvas.width = 400;
+    dailyCanvas.height = 250;
+    cumulativeCanvas.width = 400;
+    cumulativeCanvas.height = 250;
+
+    // Daily chart (bar chart)
+    const dailyCtx = dailyCanvas.getContext("2d");
+    if (dailyCtx) {
+      const dailyLabels = data.dailyData.map((d) => d.date);
+      const actualHours = data.dailyData.map((d) => d.actualHours);
+      const expectedHours = data.dailyData.map((d) => d.expectedHours);
+
+      console.log("Creating daily chart");
+
+      charts.daily = new Chart(dailyCtx, {
+        type: "bar",
+        data: {
+          labels: dailyLabels,
+          datasets: [
+            {
+              label: "Actual Hours",
+              data: actualHours,
+              backgroundColor: "rgba(14, 124, 102, 0.7)",
+            },
+            {
+              label: "Expected Hours",
+              data: expectedHours,
+              backgroundColor: "rgba(200, 200, 200, 0.5)",
+            },
+          ],
         },
-        scales: {
-          y: {
-            beginAtZero: true,
-            title: {
-              display: true,
-              text: "Hours",
+        options: {
+          responsive: false,
+          plugins: {
+            legend: {
+              position: "bottom" as const,
+            },
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
             },
           },
         },
-      },
-    });
-  }
+      });
+    }
 
-  // Cumulative chart (line chart)
-  const cumulativeCtx = cumulativeCanvas.getContext("2d");
-  if (cumulativeCtx) {
-    charts.cumulative = new Chart(cumulativeCtx, {
-      type: "line",
-      data: {
-        labels: data.dailyData.map((d: any) => d.date),
-        datasets: [
-          {
-            label: "Cumulative Overtime",
-            data: data.dailyData.map((d: any) => d.cumulativeOvertimeHours),
-            borderColor: "#1f6fd1",
-            backgroundColor: "rgba(31, 111, 209, 0.1)",
-            tension: 0.3,
-            fill: true,
-            pointRadius: 0,
-            borderWidth: 2,
-          },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-          legend: {
-            display: true,
-            position: "top",
-          },
+    // Cumulative chart (line chart)
+    const cumulativeCtx = cumulativeCanvas.getContext("2d");
+    if (cumulativeCtx) {
+      const cumulativeLabels = data.dailyData.map((d) => d.date);
+      const cumulativeHours = data.dailyData.map((d) => d.cumulativeOvertimeHours);
+
+      console.log("Creating cumulative chart");
+
+      charts.cumulative = new Chart(cumulativeCtx, {
+        type: "line",
+        data: {
+          labels: cumulativeLabels,
+          datasets: [
+            {
+              label: "Cumulative Overtime",
+              data: cumulativeHours,
+              borderColor: "#1f6fd1",
+              backgroundColor: "rgba(31, 111, 209, 0.1)",
+              tension: 0.3,
+              fill: true,
+              pointRadius: 0,
+              borderWidth: 2,
+            },
+          ],
         },
-        scales: {
-          y: {
-            title: {
-              display: true,
-              text: "Hours",
+        options: {
+          responsive: false,
+          plugins: {
+            legend: {
+              position: "bottom" as const,
+            },
+          },
+          scales: {
+            y: {
+              ticks: {
+                stepSize: 1,
+              },
             },
           },
         },
-      },
-    });
+      });
+
+      console.log("Charts created successfully");
+    }
+  } catch (error) {
+    console.error("Error rendering charts:", error);
+    if (error instanceof Error) {
+      console.error("Stack trace:", error.stack);
+    }
   }
 }
