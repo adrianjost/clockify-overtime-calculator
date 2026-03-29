@@ -335,6 +335,28 @@ function createBarChart(
     }
   });
 
+  // 8h reference line on left axis
+  const y8h = padding.top + chartHeight - (8 / maxValue) * chartHeight;
+  const line8h = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  line8h.setAttribute("x1", String(padding.left));
+  line8h.setAttribute("y1", String(y8h));
+  line8h.setAttribute("x2", String(padding.left + chartWidth));
+  line8h.setAttribute("y2", String(y8h));
+  line8h.setAttribute("stroke", "#666");
+  line8h.setAttribute("stroke-width", "1.5");
+  line8h.setAttribute("stroke-dasharray", "4 4");
+  line8h.setAttribute("opacity", "0.75");
+  svg.appendChild(line8h);
+
+  const label8h = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  label8h.setAttribute("x", String(padding.left - 10));
+  label8h.setAttribute("y", String(y8h + 4));
+  label8h.setAttribute("text-anchor", "end");
+  label8h.setAttribute("font-size", "12");
+  label8h.setAttribute("fill", "#666");
+  label8h.textContent = "8h";
+  svg.appendChild(label8h);
+
   // Draw cumulative overtime line (right Y axis scale)
   if (cumulativeData.length > 0) {
     const points: Array<{ x: number; y: number }> = [];
@@ -383,21 +405,6 @@ function createBarChart(
     line.setAttribute("stroke-linejoin", "round");
     svg.appendChild(line);
 
-    // Subtle points for visibility
-    cumulativeData.forEach((value, index) => {
-      const x = padding.left + index * barWidth + barWidth / 2;
-      const normalized = (value - cumulativeMin) / cumulativeRange;
-      const y = padding.top + chartHeight - normalized * chartHeight;
-      const point = document.createElementNS(
-        "http://www.w3.org/2000/svg",
-        "circle",
-      );
-      point.setAttribute("cx", String(x));
-      point.setAttribute("cy", String(y));
-      point.setAttribute("r", "2");
-      point.setAttribute("fill", "#0057d8");
-      svg.appendChild(point);
-    });
 
     // Right Y-axis labels for cumulative overtime
     for (let i = 0; i <= 5; i += 1) {
