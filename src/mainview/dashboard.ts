@@ -968,7 +968,12 @@ function formatHoursToHoursAndMinutes(hours: number): string {
   return `${wholeHours}h ${minutes}min`;
 }
 
-function showChartTooltip(event: MouseEvent, dateStr: string, hours: number, endDate?: string) {
+function showChartTooltip(
+  event: MouseEvent,
+  dateStr: string,
+  hours: number,
+  endDate?: string,
+) {
   // Remove existing tooltip
   if (activeTooltip) {
     activeTooltip.remove();

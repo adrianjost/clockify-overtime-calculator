@@ -18,11 +18,11 @@
               id="api-key"
               type="password"
               required
-              placeholder="Paste your API key from https://clockify.me/user/settings"
+              placeholder="e.g. AbCdEfGh12345678"
               autocomplete="off"
             />
             <p class="hint">
-              Your API key is stored locally and never sent anywhere else.
+              Your API key is stored locally on this device and never shared.
             </p>
           </div>
           <div class="form-actions">
@@ -30,6 +30,42 @@
             <span id="save-status"></span>
           </div>
         </form>
+
+        <div class="onboarding-guide">
+          <h2>How to get your API key</h2>
+          <ol>
+            <li>
+              Open
+              <strong>clockify.me</strong> and sign in to your account.
+            </li>
+            <li>
+              Click your avatar in the top-right corner and choose
+              <strong>Profile Settings</strong>.
+            </li>
+            <li>
+              Scroll to the bottom of the page to the
+              <strong>API</strong> section.
+            </li>
+            <li>
+              Click <strong>Generate</strong> (or copy the existing key) and
+              paste it into the field above.
+            </li>
+          </ol>
+          <h2>What data is accessed</h2>
+          <p>
+            The app only reads your own time entries using the standard Clockify
+            personal API key &mdash; no special permissions or admin access are
+            required. Specifically, it fetches:
+          </p>
+          <ul>
+            <li>Your user profile (to identify your workspace)</li>
+            <li>Your time entries for the selected year</li>
+          </ul>
+          <p>
+            No data is written back to Clockify and nothing leaves this device.
+          </p>
+        </div>
+
         <div class="settings-danger-zone">
           <button id="reset-all-btn" class="btn-danger">
             Reset all stored data
