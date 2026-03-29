@@ -229,6 +229,7 @@ function renderCharts(data: OvertimeData) {
     let cumulativeToUse = cumulativeHours;
     let labelsToUse = displayLabels;
     let datesToUse = dailyDates;
+    let weeklyReferenceHoursToUse: number[] | undefined;
 
     if (shouldUseWeekly) {
       const weeklyData = aggregateToWeekly(filledDailyData, cumulativeHours);
@@ -236,6 +237,7 @@ function renderCharts(data: OvertimeData) {
       cumulativeToUse = weeklyData.cumulative;
       labelsToUse = weeklyData.labels;
       datesToUse = weeklyData.dates;
+      weeklyReferenceHoursToUse = weeklyData.referenceHours;
     }
 
     // Update chart title based on view mode
@@ -255,6 +257,7 @@ function renderCharts(data: OvertimeData) {
       chartWidth,
       chartHeight,
       shouldUseWeekly,
+      weeklyReferenceHoursToUse,
     );
     dailyContainer.appendChild(barSvg);
 
@@ -275,6 +278,7 @@ function aggregateToWeekly(
   cumulative: number[];
   labels: string[];
   dates: string[];
+  referenceHours: number[];
 } {
   // Group daily data by ISO week (Monday-based)
   const weekKeyToData = new Map<
@@ -302,6 +306,7 @@ function aggregateToWeekly(
   const hours: number[] = [];
   const dates: string[] = [];
   const cumulative: number[] = [];
+  const referenceHours: number[] = [];
 
   for (const weekKey of weekOrder) {
     const weekData = weekKeyToData.get(weekKey)!;
@@ -316,6 +321,10 @@ function aggregateToWeekly(
 
     // Use Monday (first day of week) as the representative date
     dates.push(weekData.startDate);
+
+    // Weekly reference: 8h for each day with recorded work in this week.
+    const workedDays = indices.filter((i) => filledDailyData[i].actualHours > 0).length;
+    referenceHours.push(workedDays * 8);
 
     // Cumulative is taken from the provided cumulative array (respects mode: daily/weekly)
     // Use the last index of the week to get the cumulative at week's end
@@ -344,7 +353,7 @@ function aggregateToWeekly(
     return "";
   });
 
-  return { hours, cumulative, labels, dates };
+  return { hours, cumulative, labels, dates, referenceHours };
 }
 
 function buildCumulativeSeries(
@@ -432,6 +441,7 @@ function createBarChart(
   width: number,
   height: number,
   isWeeklyView: boolean,
+  weeklyReferenceHours?: number[],
 ): SVGSVGElement {
   const padding = { top: 20, right: 25, bottom: 15, left: 25 };
   const chartWidth = width - padding.left - padding.right;
@@ -442,8 +452,10 @@ function createBarChart(
   svg.setAttribute("height", String(height));
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
 
-  const referenceHours = isWeeklyView ? 40 : 8;
-  const rawMax = Math.max(...data, referenceHours, 1);
+  const maxReferenceHours = isWeeklyView
+    ? Math.max(...(weeklyReferenceHours ?? [0]), 0)
+    : 8;
+  const rawMax = Math.max(...data, maxReferenceHours, 1);
   // Coarser ticks on narrow widths or short heights
   const maxLeftTicks = width < 640 ? 5 : height < 250 ? 5 : 8;
   // Step must be a divisor of 8 so both 0 and the reference line value fit cleanly.
@@ -505,6 +517,27 @@ function createBarChart(
     rect.addEventListener("mouseleave", hideChartTooltip);
     svg.appendChild(rect);
 
+    if (isWeeklyView) {
+      const referenceHours = weeklyReferenceHours?.[index] ?? 0;
+      if (referenceHours > 0) {
+        const yReference =
+          padding.top + chartHeight - (referenceHours / leftMax) * chartHeight;
+        const referenceLine = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "line",
+        );
+        referenceLine.setAttribute("x1", String(x));
+        referenceLine.setAttribute("y1", String(yReference));
+        referenceLine.setAttribute("x2", String(x + actualBarWidth));
+        referenceLine.setAttribute("y2", String(yReference));
+        referenceLine.setAttribute("stroke", "#666");
+        referenceLine.setAttribute("stroke-width", "1.5");
+        referenceLine.setAttribute("stroke-dasharray", "4 4");
+        referenceLine.setAttribute("opacity", "0.75");
+        svg.appendChild(referenceLine);
+      }
+    }
+
     // X-axis labels
     const labelX = x + actualBarWidth / 2;
     if (labels[index] && labelX - lastLabelX >= minLabelSpacing) {
@@ -523,23 +556,23 @@ function createBarChart(
     }
   });
 
-  // Working-hours reference line on left axis:
-  // daily view = 8h, weekly view = 40h.
-  const yReference =
-    padding.top + chartHeight - (referenceHours / leftMax) * chartHeight;
-  const referenceLine = document.createElementNS(
-    "http://www.w3.org/2000/svg",
-    "line",
-  );
-  referenceLine.setAttribute("x1", String(padding.left));
-  referenceLine.setAttribute("y1", String(yReference));
-  referenceLine.setAttribute("x2", String(padding.left + chartWidth));
-  referenceLine.setAttribute("y2", String(yReference));
-  referenceLine.setAttribute("stroke", "#666");
-  referenceLine.setAttribute("stroke-width", "1.5");
-  referenceLine.setAttribute("stroke-dasharray", "4 4");
-  referenceLine.setAttribute("opacity", "0.75");
-  svg.appendChild(referenceLine);
+  // Daily view keeps a fixed 8h full-width reference line.
+  if (!isWeeklyView) {
+    const yReference = padding.top + chartHeight - (8 / leftMax) * chartHeight;
+    const referenceLine = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "line",
+    );
+    referenceLine.setAttribute("x1", String(padding.left));
+    referenceLine.setAttribute("y1", String(yReference));
+    referenceLine.setAttribute("x2", String(padding.left + chartWidth));
+    referenceLine.setAttribute("y2", String(yReference));
+    referenceLine.setAttribute("stroke", "#666");
+    referenceLine.setAttribute("stroke-width", "1.5");
+    referenceLine.setAttribute("stroke-dasharray", "4 4");
+    referenceLine.setAttribute("opacity", "0.75");
+    svg.appendChild(referenceLine);
+  }
 
   // Draw cumulative overtime line (right Y axis scale)
   if (cumulativeData.length > 0) {
