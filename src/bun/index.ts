@@ -132,6 +132,7 @@ const mainWindow = new BrowserWindow({
 });
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
+let clampTimer: ReturnType<typeof setTimeout> | null = null;
 
 mainWindow.on("resize", (event: unknown) => {
   const data = (event as { data?: { width?: number; height?: number } })?.data;
@@ -145,12 +146,31 @@ mainWindow.on("resize", (event: unknown) => {
     return;
   }
 
+  const clampedWidth = Math.max(MIN_WINDOW_WIDTH, Math.floor(data.width));
+  const clampedHeight = Math.max(MIN_WINDOW_HEIGHT, Math.floor(data.height));
+
+  if (clampTimer) {
+    clearTimeout(clampTimer);
+  }
+
+  // Electrobun currently has no native min-size API. Apply a delayed clamp so
+  // the user doesn't see continuous snap-back flicker while dragging smaller.
+  clampTimer = setTimeout(() => {
+    const current = mainWindow.getSize();
+    const width = Math.max(MIN_WINDOW_WIDTH, Math.floor(current.width));
+    const height = Math.max(MIN_WINDOW_HEIGHT, Math.floor(current.height));
+    if (width !== current.width || height !== current.height) {
+      mainWindow.setSize(width, height);
+    }
+    clampTimer = null;
+  }, 120);
+
   if (persistTimer) {
     clearTimeout(persistTimer);
   }
 
   persistTimer = setTimeout(() => {
-    persistWindowSize(data.width!, data.height!);
+    persistWindowSize(clampedWidth, clampedHeight);
     persistTimer = null;
   }, 200);
 });

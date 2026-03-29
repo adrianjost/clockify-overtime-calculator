@@ -431,7 +431,7 @@ function createBarChart(
   width: number,
   height: number,
 ): SVGSVGElement {
-  const padding = { top: 20, right: 50, bottom: 15, left: 40 };
+  const padding = { top: 20, right: 25, bottom: 15, left: 25 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
 
