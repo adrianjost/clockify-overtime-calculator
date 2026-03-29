@@ -8,20 +8,18 @@ export function initializeDashboard(
   onNavigateToSettings: () => void,
 ) {
   const yearSelect = document.querySelector<HTMLInputElement>("#year-select");
-  const lastFetchedEl =
-    document.querySelector<HTMLDivElement>("#last-fetched");
-  const statusMessage =
-    document.querySelector<HTMLDivElement>("#status-message");
-  const cumulativeModeSelect =
-    document.querySelector<HTMLSelectElement>("#cumulative-mode");
+  const lastFetchedEl = document.querySelector<HTMLDivElement>("#last-fetched");
+  const fetchSpinner = document.querySelector<HTMLElement>("#fetch-spinner");
+  const cumulativeModeToggle =
+    document.querySelector<HTMLInputElement>("#cumulative-mode");
   const content = document.querySelector<HTMLDivElement>("#content");
   const overtimeValue =
     document.querySelector<HTMLDivElement>("#overtime-value");
   let lastData: OvertimeData | null = null;
 
-  if (cumulativeModeSelect) {
-    cumulativeModeSelect.value = "daily";
-    cumulativeModeSelect.addEventListener("change", () => {
+  if (cumulativeModeToggle) {
+    cumulativeModeToggle.checked = false;
+    cumulativeModeToggle.addEventListener("change", () => {
       if (!lastData) {
         return;
       }
@@ -53,7 +51,7 @@ export function initializeDashboard(
       return;
     }
 
-    setStatus("Analyzing...", "loading");
+    setLoading(true);
     lastFetchTime = Date.now();
 
     try {
@@ -63,13 +61,15 @@ export function initializeDashboard(
       });
       lastData = data;
       renderDashboard(data, overtimeValue, content, getCumulativeMode());
-      setStatus("", "");
+      setLoading(false);
       if (lastFetchedEl) {
-        lastFetchedEl.textContent = `Last fetched: ${new Date().toLocaleTimeString()}`;
+        lastFetchedEl.textContent = `Last fetched: ${new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
+        lastFetchedEl.appendChild(fetchSpinner!);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      setStatus(`Error: ${message}`, "error");
+      setLoading(false);
+      if (lastFetchedEl) lastFetchedEl.textContent = `Error: ${message}`;
     }
   }
 
@@ -110,18 +110,12 @@ export function initializeDashboard(
     startPolling();
   }
 
-  function setStatus(
-    message: string,
-    type: "loading" | "error" | "success" | "",
-  ) {
-    if (statusMessage) {
-      statusMessage.textContent = message;
-      statusMessage.className = type ? `status-${type}` : "";
-    }
+  function setLoading(loading: boolean) {
+    if (fetchSpinner) fetchSpinner.hidden = !loading;
   }
 
   function getCumulativeMode(): CumulativeMode {
-    return cumulativeModeSelect?.value === "weekly" ? "weekly" : "daily";
+    return cumulativeModeToggle?.checked ? "weekly" : "daily";
   }
 }
 
