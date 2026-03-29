@@ -267,13 +267,11 @@ body {
   background: #f5f5f5;
 }
 
-/* Overtime Card */
+/* Overtime Card — top-right of header */
 .overtime-card {
   background: transparent;
   color: var(--text);
-  padding: 4px 0 10px;
-  margin-bottom: 12px;
-  text-align: left;
+  text-align: right;
 }
 
 .overtime-label {
@@ -288,12 +286,19 @@ body {
   line-height: 1.1;
 }
 
+/* Chart footer — toggle + settings below chart */
+.chart-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
 /* Charts */
 .charts-container {
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
-  margin-top: 8px;
 }
 
 .chart-card {
