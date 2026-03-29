@@ -1,19 +1,29 @@
-# Clockify Overtime Calculator
+# Clockify Overtime Desktop App
 
-This is a simple script that calculates the overtime hours worked in a week using the Clockify API.
-It also prints out the total overtime hours worked in the current year.
+Native macOS desktop app built with Electrobun.
 
-It's important that your time entries include any sick days and vacation days you've taken, as the script calculates the overtime hours based on the total hours "worked" in a week.
+## Features
 
-## Usage
+- Enter your Clockify API key in-app
+- Choose a year to analyze
+- Run overtime analysis from the Bun process
+- View the same report output format as the original CLI in plain text
 
-```
-# install dependencies
-npm install
+## Run
 
-# run once
-env CLOCKIFY_API_KEY=YOUR_API_KEY npm run start -- --year 2024
+1. Install dependencies:
+   bun install
 
-# dev mode
-env CLOCKIFY_API_KEY=YOUR_API_KEY npm run dev
-```
+2. Start app in dev mode:
+   bun start
+
+3. In the app window:
+   - Paste your Clockify API key
+   - Enter a year
+   - Click Analyze
+
+## Structure
+
+- src/bun: Bun main process and Clockify analysis logic
+- src/mainview: HTML/CSS/TS desktop UI
+- src/shared: Shared RPC types

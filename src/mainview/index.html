@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clockify Overtime</title>
+    <link rel="stylesheet" href="index.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header>
+        <h1>Clockify Overtime Calculator</h1>
+        <p>
+          Enter your API key and year, then run the same overtime analysis
+          report in this app.
+        </p>
+      </header>
+
+      <form id="analyze-form" autocomplete="off">
+        <label for="api-key">Clockify API Key</label>
+        <input
+          id="api-key"
+          name="apiKey"
+          type="password"
+          required
+          placeholder="Paste API key"
+        />
+
+        <label for="year">Year</label>
+        <input
+          id="year"
+          name="year"
+          type="number"
+          min="1970"
+          max="3000"
+          required
+        />
+
+        <div class="actions">
+          <button id="analyze-button" type="submit">Analyze</button>
+          <span id="status"></span>
+        </div>
+      </form>
+
+      <section>
+        <h2>Output</h2>
+        <pre id="output">Report output will appear here.</pre>
+      </section>
+
+      <div class="footer">
+        <p>The report format matches the CLI output in plain text.</p>
+      </div>
+    </div>
+    <script src="views://mainview/index.js"></script>
+  </body>
+</html>

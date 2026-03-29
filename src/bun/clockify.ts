@@ -1,39 +1,50 @@
 import { Temporal } from "temporal-polyfill";
-import { fetchWithRetry } from "./fetch";
-import { options } from "./cli";
+import { fetchWithRetry } from "./fetch.ts";
 
-const apiKey = options.apiKey;
+type ActiveUser = {
+  id: string;
+  defaultWorkspace: string;
+};
 
-export const fetchActiveUser = async () => {
+type TimeEntry = {
+  timeInterval: {
+    start: string;
+    duration: string | null;
+  };
+};
+
+const getHeaders = (apiKey: string): Record<string, string> => ({
+  "X-Api-Key": apiKey,
+});
+
+export const fetchActiveUser = async (apiKey: string): Promise<ActiveUser> => {
   const response = await fetchWithRetry("https://api.clockify.me/api/v1/user", {
     method: "GET",
-    headers: {
-      "X-Api-Key": apiKey,
-    },
+    headers: getHeaders(apiKey),
   });
   if (!response.ok) {
-    console.log(await response.text());
-    throw new Error("Failed to fetch user");
+    throw new Error(await response.text());
   }
-  const data = await response.json();
+  const data = (await response.json()) as ActiveUser;
   return data;
 };
 
 export const fetchTimeEntries = async (
+  apiKey: string,
   workspaceID: string,
   userID: string,
   from: Temporal.PlainDate,
-  to: Temporal.PlainDate
-): Promise<Record<string, unknown>[]> => {
+  to: Temporal.PlainDate,
+): Promise<TimeEntry[]> => {
   const fromString = new Date(
-    new Date(`${from.toString()}T00:00:00Z`).getTime()
+    new Date(`${from.toString()}T00:00:00Z`).getTime(),
   ).toISOString();
   const toString = new Date(
-    new Date(`${to.toString()}T23:59:59Z`).getTime()
+    new Date(`${to.toString()}T23:59:59Z`).getTime(),
   ).toISOString();
 
   const pageSize = 5000;
-  const timeEntries: Record<string, unknown>[] = [];
+  const timeEntries: TimeEntry[] = [];
 
   let page = 0;
   while (true) {
@@ -41,20 +52,14 @@ export const fetchTimeEntries = async (
       `https://api.clockify.me/api/v1/workspaces/${workspaceID}/user/${userID}/time-entries?start=${fromString}&end=${toString}&page-size=${pageSize}&page=${page}`,
       {
         method: "GET",
-        headers: {
-          "X-Api-Key": apiKey,
-        },
-      }
+        headers: getHeaders(apiKey),
+      },
     );
     if (!response.ok) {
-      console.log(await response.text());
-      throw new Error("Failed to fetch time entries");
+      throw new Error(await response.text());
     }
-    const data = await response.json();
-    for (const timeEntry of data) {
-      timeEntries.push(timeEntry);
-    }
-    console.log(`Fetched ${timeEntries.length} time entries`);
+    const data = (await response.json()) as TimeEntry[];
+    timeEntries.push(...data);
     if (data.length !== pageSize) {
       break;
     }
@@ -64,9 +69,10 @@ export const fetchTimeEntries = async (
 };
 
 export const fetchYear = async (
+  apiKey: string,
   workspaceID: string,
   userID: string,
-  year: number
+  year: number,
 ): Promise<Map<string, Temporal.Duration>> => {
   const firstDayOfYear = Temporal.PlainDate.from({
     year,
@@ -79,16 +85,17 @@ export const fetchYear = async (
     day: 31,
   });
   const timeEntries = await fetchTimeEntries(
+    apiKey,
     workspaceID,
     userID,
     firstDayOfYear,
-    lastDayOfYear
+    lastDayOfYear,
   );
 
   const durationPerDay = new Map<string, Temporal.Duration>();
-  for (const entry of timeEntries as any) {
+  for (const entry of timeEntries) {
     const date = Temporal.PlainDate.from(entry.timeInterval.start.slice(0, 10));
-    let duration;
+    let duration: Temporal.Duration;
     if (entry.timeInterval.duration === null) {
       const start = Temporal.Instant.from(entry.timeInterval.start);
       const end = Temporal.Now.instant();

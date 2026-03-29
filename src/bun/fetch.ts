@@ -2,8 +2,8 @@ export const fetchWithRetry = async (
   url: string,
   options: RequestInit,
 ): Promise<Response> => {
-  let response;
-  for (let i = 0; i < 3; i++) {
+  let response: Response | undefined;
+  for (let i = 0; i < 3; i += 1) {
     response = await fetch(url, options);
     if (response.ok) {
       break;
