@@ -5,6 +5,7 @@ import {
   ContextMenu,
   Screen,
   Tray,
+  Utils,
 } from "electrobun/bun";
 import {
   existsSync,
@@ -199,6 +200,14 @@ let trayEnabled = preferences.trayEnabled;
 let trayTitle = "--";
 let tray: Tray | null = null;
 
+function setDockVisible(visible: boolean) {
+  try {
+    Utils.setDockIconVisible(visible);
+  } catch {
+    // Best effort. If unsupported on this platform/runtime, ignore.
+  }
+}
+
 function isRightClickAction(action: string): boolean {
   const normalized = action.toLowerCase();
   return (
@@ -385,6 +394,7 @@ function createMainWindow(hidden: boolean): BrowserWindow {
   });
 
   mainWindowId = win.id;
+  setDockVisible(!hidden);
 
   win.on("resize", (event: unknown) => {
     const data = (event as { data?: { width?: number; height?: number } })
@@ -428,6 +438,7 @@ function createMainWindow(hidden: boolean): BrowserWindow {
     const { width, height } = win.getSize();
     persistWindowSize(width, height);
     mainWindowId = null;
+    setDockVisible(false);
     if (!trayEnabled) {
       process.exit(0);
     }
@@ -440,6 +451,7 @@ function openMainWindow(): void {
   if (mainWindowId !== null) {
     const win = BrowserWindow.getById(mainWindowId);
     if (win) {
+      setDockVisible(true);
       win.unminimize();
       win.show();
       return;
@@ -454,4 +466,5 @@ if (trayEnabled) {
   createTray();
 }
 
+setDockVisible(!(startInBackground && trayEnabled));
 createMainWindow(startInBackground && trayEnabled);
