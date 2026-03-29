@@ -151,7 +151,7 @@ function renderCharts(data: OvertimeData) {
       displayLabels,
       dailyDates,
       "Hours Worked",
-      "#0e7c66",
+      "rgba(132, 150, 163, 0.45)",
     );
     dailyContainer.appendChild(barSvg);
 
@@ -193,19 +193,10 @@ function createBarChart(
   const cumulativeMax = Math.max(...cumulativeData, 0);
   const cumulativeRange = cumulativeMax - cumulativeMin || 1;
 
-  // Y-axis gridlines
+  // Left Y-axis labels for daily hours
   for (let i = 0; i <= 5; i++) {
     const y = padding.top + (chartHeight / 5) * i;
-    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    line.setAttribute("x1", String(padding.left));
-    line.setAttribute("y1", String(y));
-    line.setAttribute("x2", String(padding.left + chartWidth));
-    line.setAttribute("y2", String(y));
-    line.setAttribute("stroke", "rgba(0, 0, 0, 0.05)");
-    line.setAttribute("stroke-width", "1");
-    svg.appendChild(line);
 
-    // Y-axis labels
     const value = Math.round((maxValue / 5) * (5 - i));
     const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
     text.setAttribute("x", String(padding.left - 10));
@@ -255,19 +246,41 @@ function createBarChart(
 
   // Draw cumulative overtime line (right Y axis scale)
   if (cumulativeData.length > 0) {
-    let pathData = "";
+    const points: Array<{ x: number; y: number }> = [];
 
     cumulativeData.forEach((value, index) => {
       const x = padding.left + index * barWidth + barWidth / 2;
       const normalized = (value - cumulativeMin) / cumulativeRange;
       const y = padding.top + chartHeight - normalized * chartHeight;
-      pathData += index === 0 ? `M ${x} ${y}` : ` L ${x} ${y}`;
+      points.push({ x, y });
     });
 
+    const zeroNormalized = (0 - cumulativeMin) / cumulativeRange;
+    const yZero = padding.top + chartHeight - zeroNormalized * chartHeight;
+    const zeroLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    zeroLine.setAttribute("x1", String(padding.left));
+    zeroLine.setAttribute("y1", String(yZero));
+    zeroLine.setAttribute("x2", String(padding.left + chartWidth));
+    zeroLine.setAttribute("y2", String(yZero));
+    zeroLine.setAttribute("stroke", "#1f6fd1");
+    zeroLine.setAttribute("stroke-width", "1.5");
+    zeroLine.setAttribute("stroke-dasharray", "4 4");
+    zeroLine.setAttribute("opacity", "0.75");
+    svg.appendChild(zeroLine);
+
+    const zeroLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    zeroLabel.setAttribute("x", String(padding.left + chartWidth + 10));
+    zeroLabel.setAttribute("y", String(yZero + 4));
+    zeroLabel.setAttribute("text-anchor", "start");
+    zeroLabel.setAttribute("font-size", "12");
+    zeroLabel.setAttribute("fill", "#1f6fd1");
+    zeroLabel.textContent = "0h";
+    svg.appendChild(zeroLabel);
+
     const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    line.setAttribute("d", pathData);
-    line.setAttribute("stroke", "#1f6fd1");
-    line.setAttribute("stroke-width", "2");
+    line.setAttribute("d", buildSmoothPath(points));
+    line.setAttribute("stroke", "#0057d8");
+    line.setAttribute("stroke-width", "3.5");
     line.setAttribute("fill", "none");
     line.setAttribute("stroke-linecap", "round");
     line.setAttribute("stroke-linejoin", "round");
@@ -281,8 +294,8 @@ function createBarChart(
       const point = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       point.setAttribute("cx", String(x));
       point.setAttribute("cy", String(y));
-      point.setAttribute("r", "1.5");
-      point.setAttribute("fill", "#1f6fd1");
+      point.setAttribute("r", "2");
+      point.setAttribute("fill", "#0057d8");
       svg.appendChild(point);
     });
 
@@ -295,22 +308,13 @@ function createBarChart(
       text.setAttribute("y", String(y + 5));
       text.setAttribute("text-anchor", "start");
       text.setAttribute("font-size", "12");
-      text.setAttribute("fill", "#1f6fd1");
+      text.setAttribute("fill", "#0057d8");
       text.textContent = value.toFixed(1);
       svg.appendChild(text);
     }
   }
 
   // Axes
-  const xAxis = document.createElementNS("http://www.w3.org/2000/svg", "line");
-  xAxis.setAttribute("x1", String(padding.left));
-  xAxis.setAttribute("y1", String(padding.top + chartHeight));
-  xAxis.setAttribute("x2", String(padding.left + chartWidth));
-  xAxis.setAttribute("y2", String(padding.top + chartHeight));
-  xAxis.setAttribute("stroke", "#333");
-  xAxis.setAttribute("stroke-width", "1");
-  svg.appendChild(xAxis);
-
   const yAxis = document.createElementNS("http://www.w3.org/2000/svg", "line");
   yAxis.setAttribute("x1", String(padding.left));
   yAxis.setAttribute("y1", String(padding.top));
@@ -330,6 +334,28 @@ function createBarChart(
   svg.appendChild(rightAxis);
 
   return svg;
+}
+
+function buildSmoothPath(points: Array<{ x: number; y: number }>): string {
+  if (points.length === 0) {
+    return "";
+  }
+
+  if (points.length === 1) {
+    return `M ${points[0].x} ${points[0].y}`;
+  }
+
+  let path = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 1; i < points.length - 1; i += 1) {
+    const next = points[i + 1];
+    const xc = (points[i].x + next.x) / 2;
+    const yc = (points[i].y + next.y) / 2;
+    path += ` Q ${points[i].x} ${points[i].y} ${xc} ${yc}`;
+  }
+
+  const last = points[points.length - 1];
+  path += ` T ${last.x} ${last.y}`;
+  return path;
 }
 
 function fillMissingDays(
