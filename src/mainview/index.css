@@ -105,6 +105,14 @@ body {
   border-radius: 8px;
 }
 
+.header-controls select {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+}
+
 /* Buttons */
 .btn-primary,
 .btn-secondary {
@@ -208,7 +216,8 @@ body {
   margin-top: 0;
 }
 
-canvas, svg {
+canvas,
+svg {
   max-width: 100%;
   height: auto;
   width: 100%;

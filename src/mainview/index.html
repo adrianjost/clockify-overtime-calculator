@@ -6,7 +6,14 @@
     <title>Clockify Overtime</title>
     <link rel="stylesheet" href="index.css" />
   </head>
-  <body style="margin: 0; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+  <body
+    style="
+      margin: 0;
+      padding: 20px;
+      font-family:
+        -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;
+    "
+  >
     <div class="app">
       <!-- Settings View -->
       <div id="settings-container" class="settings-view">
@@ -21,7 +28,9 @@
               placeholder="Paste your API key from https://clockify.me/user/settings"
               autocomplete="off"
             />
-            <p class="hint">Your API key is stored locally and never sent anywhere else.</p>
+            <p class="hint">
+              Your API key is stored locally and never sent anywhere else.
+            </p>
           </div>
           <div class="form-actions">
             <button type="submit" class="btn-primary">Save API Key</button>
@@ -31,14 +40,29 @@
       </div>
 
       <!-- Dashboard View -->
-      <div id="dashboard-container" class="dashboard-view" style="display: none;">
+      <div
+        id="dashboard-container"
+        class="dashboard-view"
+        style="display: none"
+      >
         <div class="dashboard-header">
           <h1>Overtime Report</h1>
           <div class="header-controls">
             <label for="year-select">Year:</label>
             <input id="year-select" type="number" min="1970" max="3000" />
+            <label for="cumulative-mode">Line:</label>
+            <select id="cumulative-mode" aria-label="Cumulative mode">
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+            </select>
             <button id="analyze-button" class="btn-primary">Analyze</button>
-            <a href="#settings" class="btn-icon" aria-label="Settings" title="Settings">&#9881;</a>
+            <a
+              href="#settings"
+              class="btn-icon"
+              aria-label="Settings"
+              title="Settings"
+              >&#9881;</a
+            >
           </div>
         </div>
 
@@ -55,7 +79,6 @@
               <h2>Daily Working Hours</h2>
               <div id="daily-chart"></div>
             </div>
-
           </div>
         </div>
       </div>

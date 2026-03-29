@@ -1,21 +1,34 @@
 import type { Electroview } from "electrobun/view";
 import type { OvertimeData } from "../bun/report.ts";
 
+type CumulativeMode = "daily" | "weekly";
+
 export function initializeDashboard(
   electrobun: Electroview<any>,
   onNavigateToSettings: () => void,
 ) {
   const yearSelect = document.querySelector<HTMLInputElement>("#year-select");
-  const analyzeButton = document.querySelector<HTMLButtonElement>(
-    "#analyze-button",
-  );
-  const statusMessage = document.querySelector<HTMLDivElement>(
-    "#status-message",
+  const analyzeButton =
+    document.querySelector<HTMLButtonElement>("#analyze-button");
+  const statusMessage =
+    document.querySelector<HTMLDivElement>("#status-message");
+  const cumulativeModeSelect = document.querySelector<HTMLSelectElement>(
+    "#cumulative-mode",
   );
   const content = document.querySelector<HTMLDivElement>("#content");
-  const overtimeValue = document.querySelector<HTMLDivElement>(
-    "#overtime-value",
-  );
+  const overtimeValue =
+    document.querySelector<HTMLDivElement>("#overtime-value");
+  let lastData: OvertimeData | null = null;
+
+  if (cumulativeModeSelect) {
+    cumulativeModeSelect.value = "daily";
+    cumulativeModeSelect.addEventListener("change", () => {
+      if (!lastData) {
+        return;
+      }
+      renderDashboard(lastData, overtimeValue, content, getCumulativeMode());
+    });
+  }
 
   if (!yearSelect || !analyzeButton) {
     throw new Error("Dashboard elements are missing");
@@ -44,11 +57,11 @@ export function initializeDashboard(
         apiKey,
         year,
       });
-      renderDashboard(data, overtimeValue, content);
+      lastData = data;
+      renderDashboard(data, overtimeValue, content, getCumulativeMode());
       setStatus("", "");
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Unknown error";
+      const message = error instanceof Error ? error.message : "Unknown error";
       setStatus(`Error: ${message}`, "error");
     } finally {
       analyzeButton.disabled = false;
@@ -67,12 +80,17 @@ export function initializeDashboard(
       statusMessage.className = type ? `status-${type}` : "";
     }
   }
+
+  function getCumulativeMode(): CumulativeMode {
+    return cumulativeModeSelect?.value === "weekly" ? "weekly" : "daily";
+  }
 }
 
 function renderDashboard(
   data: OvertimeData,
   overtimeValue: HTMLDivElement | null,
   content: HTMLDivElement | null,
+  cumulativeMode: CumulativeMode,
 ) {
   if (!overtimeValue || !content) return;
 
@@ -89,19 +107,18 @@ function renderDashboard(
   content.style.display = "block";
 
   // Render charts
-  renderCharts(data);
+  renderCharts(data, cumulativeMode);
 }
 
-function renderCharts(data: OvertimeData) {
+function renderCharts(data: OvertimeData, cumulativeMode: CumulativeMode) {
   try {
     console.log("Rendering charts with data:", {
       totalOvertimeHours: data.totalOvertimeHours,
       dailyDataLength: data.dailyData.length,
     });
 
-    const dailyContainer = document.querySelector<HTMLDivElement>(
-      "#daily-chart",
-    );
+    const dailyContainer =
+      document.querySelector<HTMLDivElement>("#daily-chart");
 
     if (!dailyContainer) {
       console.error("Daily chart container not found");
@@ -117,9 +134,7 @@ function renderCharts(data: OvertimeData) {
     // Prepare data
     const dailyDates = filledDailyData.map((d) => d.date);
     const actualHours = filledDailyData.map((d) => d.actualHours);
-    const cumulativeHours = filledDailyData.map(
-      (d) => d.cumulativeOvertimeHours,
-    );
+    const cumulativeHours = buildCumulativeSeries(filledDailyData, cumulativeMode);
 
     // Create display labels (only on month changes)
     const displayLabels = dailyDates.map((date, index) => {
@@ -150,11 +165,9 @@ function renderCharts(data: OvertimeData) {
       cumulativeHours,
       displayLabels,
       dailyDates,
-      "Hours Worked",
       "rgba(132, 150, 163, 0.45)",
     );
     dailyContainer.appendChild(barSvg);
-
 
     console.log("Charts created successfully");
   } catch (error) {
@@ -165,12 +178,87 @@ function renderCharts(data: OvertimeData) {
   }
 }
 
+function buildCumulativeSeries(
+  filledDailyData: OvertimeData["dailyData"],
+  mode: CumulativeMode,
+): number[] {
+  if (mode === "daily") {
+    return filledDailyData.map((d) => d.cumulativeOvertimeHours);
+  }
+
+  // Weekly mode: flat before first worked day and after last worked day of each week,
+  // linearly interpolated between them so buildSmoothPath produces a gentle curve.
+  const n = filledDailyData.length;
+  const result = new Array<number>(n).fill(0);
+
+  // Group array indices by week key, preserving order.
+  const weekKeyToIndices = new Map<string, number[]>();
+  const weekOrder: string[] = [];
+  for (let i = 0; i < n; i++) {
+    const key = getWeekKey(filledDailyData[i].date);
+    if (!weekKeyToIndices.has(key)) {
+      weekKeyToIndices.set(key, []);
+      weekOrder.push(key);
+    }
+    weekKeyToIndices.get(key)!.push(i);
+  }
+
+  let prevCumulative = 0;
+
+  for (const key of weekOrder) {
+    const indices = weekKeyToIndices.get(key)!;
+    const workedIndices = indices.filter(
+      (i) => filledDailyData[i].actualHours > 0,
+    );
+
+    if (workedIndices.length === 0) {
+      // No work this week – hold flat at the previous cumulative.
+      for (const i of indices) {
+        result[i] = prevCumulative;
+      }
+      continue;
+    }
+
+    const firstWorked = workedIndices[0];
+    const lastWorked = workedIndices[workedIndices.length - 1];
+    const weekEndCumulative =
+      filledDailyData[lastWorked].cumulativeOvertimeHours;
+
+    for (const i of indices) {
+      if (i < firstWorked) {
+        // Before the week's first worked day – flat.
+        result[i] = prevCumulative;
+      } else if (i > lastWorked) {
+        // After the week's last worked day – flat at new level.
+        result[i] = weekEndCumulative;
+      } else {
+        // Between first and last worked day – linear interpolation so the
+        // smooth path can curve through this range.
+        const span = lastWorked - firstWorked;
+        const t = span === 0 ? 1 : (i - firstWorked) / span;
+        result[i] = prevCumulative + t * (weekEndCumulative - prevCumulative);
+      }
+    }
+
+    prevCumulative = weekEndCumulative;
+  }
+
+  return result;
+}
+
+function getWeekKey(isoDate: string): string {
+  const date = new Date(isoDate);
+  const day = date.getDay();
+  const offsetToMonday = day === 0 ? -6 : 1 - day;
+  date.setDate(date.getDate() + offsetToMonday);
+  return formatIsoDate(date);
+}
+
 function createBarChart(
   data: number[],
   cumulativeData: number[],
   labels: string[],
   dates: string[],
-  title: string,
   color: string,
 ): SVGSVGElement {
   const width = 800;
@@ -233,7 +321,10 @@ function createBarChart(
 
     // X-axis labels
     if (labels[index]) {
-      const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      const text = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "text",
+      );
       text.setAttribute("x", String(x + actualBarWidth / 2));
       text.setAttribute("y", String(padding.top + chartHeight + 15));
       text.setAttribute("text-anchor", "middle");
@@ -257,7 +348,10 @@ function createBarChart(
 
     const zeroNormalized = (0 - cumulativeMin) / cumulativeRange;
     const yZero = padding.top + chartHeight - zeroNormalized * chartHeight;
-    const zeroLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    const zeroLine = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "line",
+    );
     zeroLine.setAttribute("x1", String(padding.left));
     zeroLine.setAttribute("y1", String(yZero));
     zeroLine.setAttribute("x2", String(padding.left + chartWidth));
@@ -268,7 +362,10 @@ function createBarChart(
     zeroLine.setAttribute("opacity", "0.75");
     svg.appendChild(zeroLine);
 
-    const zeroLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    const zeroLabel = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "text",
+    );
     zeroLabel.setAttribute("x", String(padding.left + chartWidth + 10));
     zeroLabel.setAttribute("y", String(yZero + 4));
     zeroLabel.setAttribute("text-anchor", "start");
@@ -291,7 +388,10 @@ function createBarChart(
       const x = padding.left + index * barWidth + barWidth / 2;
       const normalized = (value - cumulativeMin) / cumulativeRange;
       const y = padding.top + chartHeight - normalized * chartHeight;
-      const point = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      const point = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "circle",
+      );
       point.setAttribute("cx", String(x));
       point.setAttribute("cy", String(y));
       point.setAttribute("r", "2");
@@ -303,7 +403,10 @@ function createBarChart(
     for (let i = 0; i <= 5; i += 1) {
       const y = padding.top + (chartHeight / 5) * i;
       const value = cumulativeMax - (cumulativeRange / 5) * i;
-      const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      const text = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "text",
+      );
       text.setAttribute("x", String(padding.left + chartWidth + 10));
       text.setAttribute("y", String(y + 5));
       text.setAttribute("text-anchor", "start");
@@ -324,7 +427,10 @@ function createBarChart(
   yAxis.setAttribute("stroke-width", "1");
   svg.appendChild(yAxis);
 
-  const rightAxis = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  const rightAxis = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "line",
+  );
   rightAxis.setAttribute("x1", String(padding.left + chartWidth));
   rightAxis.setAttribute("y1", String(padding.top));
   rightAxis.setAttribute("x2", String(padding.left + chartWidth));
@@ -416,16 +522,16 @@ function formatIsoDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-  let activeTooltip: HTMLElement | null = null;
+let activeTooltip: HTMLElement | null = null;
 
-  function showChartTooltip(event: MouseEvent, dateStr: string, hours: number) {
-    // Remove existing tooltip
-    if (activeTooltip) {
-      activeTooltip.remove();
-    }
+function showChartTooltip(event: MouseEvent, dateStr: string, hours: number) {
+  // Remove existing tooltip
+  if (activeTooltip) {
+    activeTooltip.remove();
+  }
 
-    const tooltip = document.createElement("div");
-    tooltip.style.cssText = `
+  const tooltip = document.createElement("div");
+  tooltip.style.cssText = `
       position: fixed;
       background: #333;
       color: #fff;
@@ -437,149 +543,31 @@ function formatIsoDate(date: Date): string {
       white-space: nowrap;
       box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     `;
-  
-    const displayDate = dateStr ? new Date(dateStr).toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    }) : "";
-  
-    tooltip.textContent = `${displayDate}: ${hours.toFixed(2)}h`;
-    document.body.appendChild(tooltip);
 
-    // Position tooltip above the bars
-    const rect = (event.target as Element).getBoundingClientRect();
-    const tooltipRect = tooltip.getBoundingClientRect();
-    tooltip.style.left = rect.left + rect.width / 2 - tooltipRect.width / 2 + "px";
-    tooltip.style.top = rect.top - 30 + "px";
+  const displayDate = dateStr
+    ? new Date(dateStr).toLocaleDateString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      })
+    : "";
 
-    activeTooltip = tooltip;
+  tooltip.textContent = `${displayDate}: ${hours.toFixed(2)}h`;
+  document.body.appendChild(tooltip);
+
+  // Position tooltip above the bars
+  const rect = (event.target as Element).getBoundingClientRect();
+  const tooltipRect = tooltip.getBoundingClientRect();
+  tooltip.style.left =
+    rect.left + rect.width / 2 - tooltipRect.width / 2 + "px";
+  tooltip.style.top = rect.top - 30 + "px";
+
+  activeTooltip = tooltip;
+}
+
+function hideChartTooltip() {
+  if (activeTooltip) {
+    activeTooltip.remove();
+    activeTooltip = null;
   }
-
-  function hideChartTooltip() {
-    if (activeTooltip) {
-      activeTooltip.remove();
-      activeTooltip = null;
-    }
-  }
-
-function createLineChart(data: number[], labels: string[], title: string, color: string): SVGSVGElement {
-  const width = 800;
-  const height = 300;
-  const padding = { top: 20, right: 20, bottom: 60, left: 60 };
-  const chartWidth = width - padding.left - padding.right;
-  const chartHeight = height - padding.top - padding.bottom;
-
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("width", String(width));
-  svg.setAttribute("height", String(height));
-  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  svg.style.border = "1px solid #f0f0f0";
-  svg.style.borderRadius = "8px";
-
-  const minValue = Math.min(...data);
-  const maxValue = Math.max(...data, minValue + 1);
-  const range = maxValue - minValue || 1;
-  const pointSpacing = chartWidth / (data.length - 1 || 1);
-
-  // Y-axis gridlines
-  for (let i = 0; i <= 5; i++) {
-    const y = padding.top + (chartHeight / 5) * i;
-    const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    line.setAttribute("x1", String(padding.left));
-    line.setAttribute("y1", String(y));
-    line.setAttribute("x2", String(padding.left + chartWidth));
-    line.setAttribute("y2", String(y));
-    line.setAttribute("stroke", "rgba(0, 0, 0, 0.05)");
-    line.setAttribute("stroke-width", "1");
-    svg.appendChild(line);
-
-    // Y-axis labels
-    const value = Math.round(maxValue - (range / 5) * i);
-    const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    text.setAttribute("x", String(padding.left - 10));
-    text.setAttribute("y", String(y + 5));
-    text.setAttribute("text-anchor", "end");
-    text.setAttribute("font-size", "12");
-    text.setAttribute("fill", "#666");
-    text.textContent = String(value);
-    svg.appendChild(text);
-  }
-
-  // Create path for line
-  let pathData = "";
-  data.forEach((value, index) => {
-    const x = padding.left + index * pointSpacing;
-    const normalizedValue = (value - minValue) / range;
-    const y = padding.top + chartHeight - normalizedValue * chartHeight;
-    pathData += (index === 0 ? "M" : "L") + ` ${x} ${y}`;
-  });
-
-  // Draw filled area
-  const areaPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  areaPath.setAttribute("d", pathData + ` L ${padding.left + chartWidth} ${padding.top + chartHeight} L ${padding.left} ${padding.top + chartHeight} Z`);
-  areaPath.setAttribute("fill", `rgba(31, 111, 209, 0.05)`);
-  areaPath.setAttribute("stroke", "none");
-  svg.appendChild(areaPath);
-
-  // Draw line
-  const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  line.setAttribute("d", pathData);
-  line.setAttribute("stroke", color);
-  line.setAttribute("stroke-width", "2.5");
-  line.setAttribute("fill", "none");
-  line.setAttribute("stroke-linecap", "round");
-  line.setAttribute("stroke-linejoin", "round");
-  svg.appendChild(line);
-
-  // Draw points
-  data.forEach((value, index) => {
-    const x = padding.left + index * pointSpacing;
-    const normalizedValue = (value - minValue) / range;
-    const y = padding.top + chartHeight - normalizedValue * chartHeight;
-
-    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    circle.setAttribute("cx", String(x));
-    circle.setAttribute("cy", String(y));
-    circle.setAttribute("r", "2");
-    circle.setAttribute("fill", color);
-    svg.appendChild(circle);
-  });
-
-  // X-axis labels
-  data.forEach((_, index) => {
-    if (labels[index]) {
-      const x = padding.left + index * pointSpacing;
-      const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      text.setAttribute("x", String(x));
-      text.setAttribute("y", String(padding.top + chartHeight + 15));
-      text.setAttribute("text-anchor", "middle");
-      text.setAttribute("font-size", "12");
-      text.setAttribute("fill", "#666");
-      text.setAttribute("transform", `rotate(45 ${x} ${padding.top + chartHeight + 15})`);
-      text.textContent = labels[index];
-      svg.appendChild(text);
-    }
-  });
-
-  // Axes
-  const xAxis = document.createElementNS("http://www.w3.org/2000/svg", "line");
-  xAxis.setAttribute("x1", String(padding.left));
-  xAxis.setAttribute("y1", String(padding.top + chartHeight));
-  xAxis.setAttribute("x2", String(padding.left + chartWidth));
-  xAxis.setAttribute("y2", String(padding.top + chartHeight));
-  xAxis.setAttribute("stroke", "#333");
-  xAxis.setAttribute("stroke-width", "1");
-  svg.appendChild(xAxis);
-
-  const yAxis = document.createElementNS("http://www.w3.org/2000/svg", "line");
-  yAxis.setAttribute("x1", String(padding.left));
-  yAxis.setAttribute("y1", String(padding.top));
-  yAxis.setAttribute("x2", String(padding.left));
-  yAxis.setAttribute("y2", String(padding.top + chartHeight));
-  yAxis.setAttribute("stroke", "#333");
-  yAxis.setAttribute("stroke-width", "1");
-  svg.appendChild(yAxis);
-
-  return svg;
 }
