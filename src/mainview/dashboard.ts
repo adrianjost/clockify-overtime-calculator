@@ -12,9 +12,8 @@ export function initializeDashboard(
     document.querySelector<HTMLButtonElement>("#analyze-button");
   const statusMessage =
     document.querySelector<HTMLDivElement>("#status-message");
-  const cumulativeModeSelect = document.querySelector<HTMLSelectElement>(
-    "#cumulative-mode",
-  );
+  const cumulativeModeSelect =
+    document.querySelector<HTMLSelectElement>("#cumulative-mode");
   const content = document.querySelector<HTMLDivElement>("#content");
   const overtimeValue =
     document.querySelector<HTMLDivElement>("#overtime-value");
@@ -134,7 +133,10 @@ function renderCharts(data: OvertimeData, cumulativeMode: CumulativeMode) {
     // Prepare data
     const dailyDates = filledDailyData.map((d) => d.date);
     const actualHours = filledDailyData.map((d) => d.actualHours);
-    const cumulativeHours = buildCumulativeSeries(filledDailyData, cumulativeMode);
+    const cumulativeHours = buildCumulativeSeries(
+      filledDailyData,
+      cumulativeMode,
+    );
 
     // Create display labels (only on month changes)
     const displayLabels = dailyDates.map((date, index) => {
@@ -273,31 +275,40 @@ function createBarChart(
   svg.style.border = "1px solid #f0f0f0";
   svg.style.borderRadius = "8px";
 
-  const maxValue = Math.max(...data, 1);
+  const rawMax = Math.max(...data, 1);
+  // Step must be a divisor of 8 so both 0 and 8 always appear as ticks.
+  const leftStep =
+    ([2, 4, 8] as const).find((s) => Math.ceil(rawMax / s) <= 8) ?? 8;
+  const leftMax = Math.ceil(rawMax / leftStep) * leftStep;
   const barWidth = chartWidth / data.length;
 
-  const cumulativeMin = Math.min(...cumulativeData, 0);
-  const cumulativeMax = Math.max(...cumulativeData, 0);
+  // Compute a nice integer axis range for the right (cumulative) axis.
+  const rawCumMin = Math.min(...cumulativeData, 0);
+  const rawCumMax = Math.max(...cumulativeData, 0);
+  const rawCumRange = rawCumMax - rawCumMin || 1;
+  const rightStep =
+    ([1, 2, 5, 10, 20, 50, 100] as const).find((s) => rawCumRange / s <= 8) ??
+    100;
+  const cumulativeMin = Math.floor(rawCumMin / rightStep) * rightStep;
+  const cumulativeMax = Math.ceil(rawCumMax / rightStep) * rightStep;
   const cumulativeRange = cumulativeMax - cumulativeMin || 1;
 
-  // Left Y-axis labels for daily hours
-  for (let i = 0; i <= 5; i++) {
-    const y = padding.top + (chartHeight / 5) * i;
-
-    const value = Math.round((maxValue / 5) * (5 - i));
+  // Left Y-axis integer labels — always includes 0 and 8.
+  for (let v = 0; v <= leftMax; v += leftStep) {
+    const y = padding.top + chartHeight - (v / leftMax) * chartHeight;
     const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
     text.setAttribute("x", String(padding.left - 10));
     text.setAttribute("y", String(y + 5));
     text.setAttribute("text-anchor", "end");
     text.setAttribute("font-size", "12");
     text.setAttribute("fill", "#666");
-    text.textContent = String(value);
+    text.textContent = String(v);
     svg.appendChild(text);
   }
 
   // Bars
   data.forEach((value, index) => {
-    const barHeight = (value / maxValue) * chartHeight;
+    const barHeight = (value / leftMax) * chartHeight;
     const x = padding.left + index * barWidth + barWidth * 0.1;
     const y = padding.top + chartHeight - barHeight;
     const actualBarWidth = barWidth * 0.8;
@@ -334,8 +345,8 @@ function createBarChart(
     }
   });
 
-  // 8h reference line on left axis
-  const y8h = padding.top + chartHeight - (8 / maxValue) * chartHeight;
+  // 8h reference line on left axis (label shown on Y axis tick).
+  const y8h = padding.top + chartHeight - (8 / leftMax) * chartHeight;
   const line8h = document.createElementNS("http://www.w3.org/2000/svg", "line");
   line8h.setAttribute("x1", String(padding.left));
   line8h.setAttribute("y1", String(y8h));
@@ -346,15 +357,6 @@ function createBarChart(
   line8h.setAttribute("stroke-dasharray", "4 4");
   line8h.setAttribute("opacity", "0.75");
   svg.appendChild(line8h);
-
-  const label8h = document.createElementNS("http://www.w3.org/2000/svg", "text");
-  label8h.setAttribute("x", String(padding.left - 10));
-  label8h.setAttribute("y", String(y8h + 4));
-  label8h.setAttribute("text-anchor", "end");
-  label8h.setAttribute("font-size", "12");
-  label8h.setAttribute("fill", "#666");
-  label8h.textContent = "8h";
-  svg.appendChild(label8h);
 
   // Draw cumulative overtime line (right Y axis scale)
   if (cumulativeData.length > 0) {
@@ -383,18 +385,6 @@ function createBarChart(
     zeroLine.setAttribute("opacity", "0.75");
     svg.appendChild(zeroLine);
 
-    const zeroLabel = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "text",
-    );
-    zeroLabel.setAttribute("x", String(padding.left + chartWidth + 10));
-    zeroLabel.setAttribute("y", String(yZero + 4));
-    zeroLabel.setAttribute("text-anchor", "start");
-    zeroLabel.setAttribute("font-size", "12");
-    zeroLabel.setAttribute("fill", "#1f6fd1");
-    zeroLabel.textContent = "0h";
-    svg.appendChild(zeroLabel);
-
     const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
     line.setAttribute("d", buildSmoothPath(points));
     line.setAttribute("stroke", "#0057d8");
@@ -404,11 +394,12 @@ function createBarChart(
     line.setAttribute("stroke-linejoin", "round");
     svg.appendChild(line);
 
-
-    // Right Y-axis labels for cumulative overtime
-    for (let i = 0; i <= 5; i += 1) {
-      const y = padding.top + (chartHeight / 5) * i;
-      const value = cumulativeMax - (cumulativeRange / 5) * i;
+    // Right Y-axis integer labels — always includes 0.
+    for (let v = cumulativeMin; v <= cumulativeMax; v += rightStep) {
+      const y =
+        padding.top +
+        chartHeight -
+        ((v - cumulativeMin) / cumulativeRange) * chartHeight;
       const text = document.createElementNS(
         "http://www.w3.org/2000/svg",
         "text",
@@ -418,7 +409,7 @@ function createBarChart(
       text.setAttribute("text-anchor", "start");
       text.setAttribute("font-size", "12");
       text.setAttribute("fill", "#0057d8");
-      text.textContent = value.toFixed(1);
+      text.textContent = String(Math.round(v));
       svg.appendChild(text);
     }
   }
