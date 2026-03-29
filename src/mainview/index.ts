@@ -66,13 +66,20 @@ try {
     },
   );
 
-  // Check if we have API key
-  const apiKey = localStorage.getItem("clockify_api_key");
-  if (!apiKey?.trim()) {
-    showSettings();
-  } else {
-    showDashboard();
-  }
+  // Check if we have API key in secure storage
+  void (async () => {
+    try {
+      const state = await (electrobun as any).rpc.request.getStoredApiKey({});
+      const apiKey = (state?.apiKey ?? "").trim();
+      if (!apiKey) {
+        showSettings();
+      } else {
+        showDashboard();
+      }
+    } catch {
+      showSettings();
+    }
+  })();
 } catch (error) {
   console.error("Failed to initialize app:", error);
   // Show dashboard as fallback

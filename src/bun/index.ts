@@ -35,6 +35,8 @@ const WINDOW_STATE_DIR = join(HOME, ".clockify-overtime");
 const WINDOW_STATE_FILE = join(WINDOW_STATE_DIR, "window-state.json");
 const PREFERENCES_FILE = join(WINDOW_STATE_DIR, "preferences.json");
 const AT_LOGIN_SENTINEL = join(WINDOW_STATE_DIR, "at-login");
+const KEYCHAIN_SERVICE = "dev.adrianjost.clockify-overtime";
+const KEYCHAIN_ACCOUNT = "clockify-api-key";
 
 const LAUNCH_AGENT_LABEL = "dev.adrianjost.clockify-overtime";
 const LAUNCH_AGENT_PLIST = join(
@@ -132,6 +134,87 @@ function persistPreferences(preferences: { trayEnabled: boolean }): void {
     );
   } catch {
     // Best effort persistence.
+  }
+}
+
+function runSecurityCommand(args: string[]): {
+  ok: boolean;
+  stdout: string;
+  stderr: string;
+} {
+  const proc = Bun.spawnSync({
+    cmd: ["security", ...args],
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const decoder = new TextDecoder();
+  return {
+    ok: proc.exitCode === 0,
+    stdout: decoder.decode(proc.stdout).trim(),
+    stderr: decoder.decode(proc.stderr).trim(),
+  };
+}
+
+function loadStoredApiKeyFromKeychain(): string | null {
+  const result = runSecurityCommand([
+    "find-generic-password",
+    "-a",
+    KEYCHAIN_ACCOUNT,
+    "-s",
+    KEYCHAIN_SERVICE,
+    "-w",
+  ]);
+  if (!result.ok) {
+    return null;
+  }
+  return result.stdout || null;
+}
+
+function persistStoredApiKeyToKeychain(apiKey: string): void {
+  const trimmed = apiKey.trim();
+  const result = runSecurityCommand([
+    "add-generic-password",
+    "-a",
+    KEYCHAIN_ACCOUNT,
+    "-s",
+    KEYCHAIN_SERVICE,
+    "-w",
+    trimmed,
+    "-U",
+  ]);
+  if (!result.ok) {
+    throw new Error(result.stderr || "Failed to store API key in Keychain.");
+  }
+}
+
+function clearStoredApiKeyFromKeychain(): void {
+  runSecurityCommand([
+    "delete-generic-password",
+    "-a",
+    KEYCHAIN_ACCOUNT,
+    "-s",
+    KEYCHAIN_SERVICE,
+  ]);
+}
+
+function loadStoredApiKey(): string | null {
+  return loadStoredApiKeyFromKeychain();
+}
+
+function persistStoredApiKey(apiKey: string): void {
+  try {
+    persistStoredApiKeyToKeychain(apiKey);
+  } catch (err) {
+    console.error("Failed to persist API key:", err);
+    throw new Error("Could not securely store API key.");
+  }
+}
+
+function clearStoredApiKey(): void {
+  try {
+    clearStoredApiKeyFromKeychain();
+  } catch {
+    // Best effort cleanup.
   }
 }
 
@@ -296,6 +379,49 @@ function setTrayEnabled(enabled: boolean) {
   }
 }
 
+async function analyzeAndUpdateTray(
+  apiKey: string,
+  year: number,
+): Promise<OvertimeData> {
+  const trimmedApiKey = apiKey.trim();
+  if (trimmedApiKey.length === 0) {
+    throw new Error("Please provide your Clockify API key.");
+  }
+  if (!Number.isInteger(year) || year < 1970 || year > 3000) {
+    throw new Error("Please provide a valid year.");
+  }
+
+  persistStoredApiKey(trimmedApiKey);
+
+  const user = await fetchActiveUser(trimmedApiKey);
+  const dataOfYear = await fetchYear(
+    trimmedApiKey,
+    user.defaultWorkspace,
+    user.id,
+    year,
+  );
+  const overtimeData = buildOvertimeData(year, dataOfYear);
+
+  trayTitle = formatTrayTitle(overtimeData);
+  if (tray) {
+    tray.setTitle(trayTitle);
+  }
+
+  return overtimeData;
+}
+
+async function refreshTrayDataOnLaunch(): Promise<void> {
+  const apiKey = loadStoredApiKey();
+  if (!apiKey) return;
+
+  const year = new Date().getFullYear();
+  try {
+    await analyzeAndUpdateTray(apiKey, year);
+  } catch (err) {
+    console.error("Launch-time tray refresh failed:", err);
+  }
+}
+
 // ─── RPC ──────────────────────────────────────────────────────────────────────
 
 const rpc = BrowserView.defineRPC<AppRPC>({
@@ -313,29 +439,7 @@ const rpc = BrowserView.defineRPC<AppRPC>({
         apiKey: string;
         year: number;
       }) => {
-        const trimmedApiKey = apiKey.trim();
-        if (trimmedApiKey.length === 0) {
-          throw new Error("Please provide your Clockify API key.");
-        }
-        if (!Number.isInteger(year) || year < 1970 || year > 3000) {
-          throw new Error("Please provide a valid year.");
-        }
-
-        const user = await fetchActiveUser(trimmedApiKey);
-        const dataOfYear = await fetchYear(
-          trimmedApiKey,
-          user.defaultWorkspace,
-          user.id,
-          year,
-        );
-        const overtimeData = buildOvertimeData(year, dataOfYear);
-
-        trayTitle = formatTrayTitle(overtimeData);
-        if (tray) {
-          tray.setTitle(trayTitle);
-        }
-
-        return overtimeData;
+        return analyzeAndUpdateTray(apiKey, year);
       },
       setLaunchAtLogin: async ({ enabled }: { enabled: boolean }) => {
         if (enabled) {
@@ -349,6 +453,15 @@ const rpc = BrowserView.defineRPC<AppRPC>({
       },
       getTrayEnabled: async () => {
         return { enabled: trayEnabled };
+      },
+      setStoredApiKey: async ({ apiKey }: { apiKey: string }) => {
+        persistStoredApiKey(apiKey);
+      },
+      getStoredApiKey: async () => {
+        return { apiKey: loadStoredApiKey() };
+      },
+      clearStoredApiKey: async () => {
+        clearStoredApiKey();
       },
     },
     messages: {},
@@ -464,6 +577,10 @@ function openMainWindow(): void {
 
 if (trayEnabled) {
   createTray();
+}
+
+if (startInBackground && trayEnabled) {
+  void refreshTrayDataOnLaunch();
 }
 
 setDockVisible(!(startInBackground && trayEnabled));

@@ -36,9 +36,14 @@ export function initializeDashboard(
   let lastFetchTime = 0;
   let pollTimer: ReturnType<typeof setInterval> | null = null;
 
+  async function getStoredApiKey(): Promise<string> {
+    const state = await (electrobun as any).rpc.request.getStoredApiKey({});
+    return (state?.apiKey ?? "").trim();
+  }
+
   async function runAnalysis() {
-    const apiKey = localStorage.getItem("clockify_api_key");
-    if (!apiKey?.trim()) {
+    const apiKey = await getStoredApiKey();
+    if (!apiKey) {
       onNavigateToSettings();
       return;
     }
@@ -80,8 +85,8 @@ export function initializeDashboard(
   runAnalysis();
 
   async function fetchIfApiKeyPresent() {
-    const apiKey = localStorage.getItem("clockify_api_key");
-    if (!apiKey?.trim()) return;
+    const apiKey = await getStoredApiKey();
+    if (!apiKey) return;
     await runAnalysis();
   }
 

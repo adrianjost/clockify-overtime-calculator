@@ -27,6 +27,18 @@ export type AppRPC = {
         params: {};
         response: { enabled: boolean };
       };
+      setStoredApiKey: {
+        params: { apiKey: string };
+        response: void;
+      };
+      getStoredApiKey: {
+        params: {};
+        response: { apiKey: string | null };
+      };
+      clearStoredApiKey: {
+        params: {};
+        response: void;
+      };
     };
     messages: {};
   }>;

@@ -13,27 +13,15 @@ export function initializeSettings(
     throw new Error("Settings form elements are missing");
   }
 
-  // Load persisted API key
-  const savedApiKey = localStorage.getItem("clockify_api_key");
-  if (savedApiKey) {
-    apiKeyInput.value = savedApiKey;
-  }
-
   // Hide reset button, close button, and launch-at-login during initial onboarding
   const dangerZone = document.querySelector<HTMLElement>(
     ".settings-danger-zone",
   );
-  if (dangerZone) {
-    dangerZone.style.display = savedApiKey ? "" : "none";
-  }
 
   const closeBtn = document.querySelector<HTMLButtonElement>(
     "#close-settings-btn",
   );
   if (closeBtn) {
-    if (savedApiKey) {
-      closeBtn.hidden = false;
-    }
     closeBtn.addEventListener("click", () => {
       onCancel?.();
     });
@@ -45,24 +33,8 @@ export function initializeSettings(
   );
   const trayEnabledCheckbox =
     document.querySelector<HTMLInputElement>("#tray-enabled");
-  if (trayEnabledGroup && trayEnabledCheckbox) {
-    if (savedApiKey) {
-      trayEnabledGroup.hidden = false;
-      trayEnabledCheckbox.checked =
-        localStorage.getItem("tray_enabled") !== "false";
-      (async () => {
-        try {
-          const state = await (electrobun as any).rpc.request.getTrayEnabled(
-            {},
-          );
-          const enabled = Boolean(state?.enabled);
-          trayEnabledCheckbox.checked = enabled;
-          localStorage.setItem("tray_enabled", String(enabled));
-        } catch (err) {
-          console.error("getTrayEnabled failed:", err);
-        }
-      })();
-    }
+  if (trayEnabledCheckbox) {
+    trayEnabledCheckbox.checked = localStorage.getItem("tray_enabled") !== "false";
 
     trayEnabledCheckbox.addEventListener("change", async () => {
       const enabled = trayEnabledCheckbox.checked;
@@ -83,12 +55,8 @@ export function initializeSettings(
   );
   const launchAtLoginCheckbox =
     document.querySelector<HTMLInputElement>("#launch-at-login");
-  if (launchAtLoginGroup && launchAtLoginCheckbox) {
-    if (savedApiKey) {
-      launchAtLoginGroup.hidden = false;
-      launchAtLoginCheckbox.checked =
-        localStorage.getItem("launch_at_login") === "true";
-    }
+  if (launchAtLoginCheckbox) {
+    launchAtLoginCheckbox.checked = localStorage.getItem("launch_at_login") === "true";
     launchAtLoginCheckbox.addEventListener("change", async () => {
       const enabled = launchAtLoginCheckbox.checked;
       localStorage.setItem("launch_at_login", String(enabled));
@@ -103,11 +71,61 @@ export function initializeSettings(
     });
   }
 
-  form.addEventListener("submit", (event) => {
+  let hasStoredApiKey = false;
+  const applyAuthVisibility = () => {
+    if (dangerZone) {
+      dangerZone.style.display = hasStoredApiKey ? "" : "none";
+    }
+    if (closeBtn) {
+      closeBtn.hidden = !hasStoredApiKey;
+    }
+    if (trayEnabledGroup) {
+      trayEnabledGroup.hidden = !hasStoredApiKey;
+    }
+    if (launchAtLoginGroup) {
+      launchAtLoginGroup.hidden = !hasStoredApiKey;
+    }
+  };
+
+  applyAuthVisibility();
+
+  void (async () => {
+    try {
+      const state = await (electrobun as any).rpc.request.getStoredApiKey({});
+      const secureApiKey = (state?.apiKey ?? "").trim();
+      if (secureApiKey) {
+        apiKeyInput.value = secureApiKey;
+        hasStoredApiKey = true;
+        if (trayEnabledCheckbox) {
+          const trayState = await (electrobun as any).rpc.request.getTrayEnabled({});
+          const enabled = Boolean(trayState?.enabled);
+          trayEnabledCheckbox.checked = enabled;
+          localStorage.setItem("tray_enabled", String(enabled));
+        }
+      }
+      applyAuthVisibility();
+    } catch (err) {
+      console.error("getStoredApiKey failed:", err);
+    }
+  })();
+
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
 
     if (apiKeyInput.value.trim()) {
-      localStorage.setItem("clockify_api_key", apiKeyInput.value);
+      try {
+        await (electrobun as any).rpc.request.setStoredApiKey({
+          apiKey: apiKeyInput.value,
+        });
+      } catch (err) {
+        console.error("setStoredApiKey failed:", err);
+        saveStatus.textContent = "Failed to save API key";
+        saveStatus.style.color = "#b42318";
+        return;
+      }
+
+      hasStoredApiKey = true;
+      applyAuthVisibility();
       saveStatus.textContent = "✓ Saved";
       saveStatus.style.color = "#0e7c66";
 
@@ -123,7 +141,7 @@ export function initializeSettings(
     let confirmPending = false;
     let confirmTimer: ReturnType<typeof setTimeout> | null = null;
 
-    resetBtn.addEventListener("click", () => {
+    resetBtn.addEventListener("click", async () => {
       if (!confirmPending) {
         confirmPending = true;
         resetBtn.textContent = "Click again to confirm";
@@ -140,6 +158,15 @@ export function initializeSettings(
       confirmPending = false;
       resetBtn.classList.remove("btn-danger-confirm");
       localStorage.clear();
+
+      try {
+        await (electrobun as any).rpc.request.clearStoredApiKey({});
+      } catch (err) {
+        console.error("clearStoredApiKey failed:", err);
+      }
+
+      hasStoredApiKey = false;
+      applyAuthVisibility();
       (electrobun as any).rpc.request.closeApp({});
     });
   }
