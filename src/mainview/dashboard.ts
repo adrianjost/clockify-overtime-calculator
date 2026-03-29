@@ -8,8 +8,8 @@ export function initializeDashboard(
   onNavigateToSettings: () => void,
 ) {
   const yearSelect = document.querySelector<HTMLInputElement>("#year-select");
-  const analyzeButton =
-    document.querySelector<HTMLButtonElement>("#analyze-button");
+  const lastFetchedEl =
+    document.querySelector<HTMLDivElement>("#last-fetched");
   const statusMessage =
     document.querySelector<HTMLDivElement>("#status-message");
   const cumulativeModeSelect =
@@ -29,11 +29,17 @@ export function initializeDashboard(
     });
   }
 
-  if (!yearSelect || !analyzeButton) {
+  if (!yearSelect) {
     throw new Error("Dashboard elements are missing");
   }
 
   yearSelect.value = new Date().getFullYear().toString();
+
+  // Polling state — declared before runAnalysis so the closure can reference them
+  const POLL_INTERVAL_MS = 5 * 60 * 1000;
+  const MIN_REFETCH_ON_VISIBILITY_MS = 60 * 1000;
+  let lastFetchTime = 0;
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
 
   async function runAnalysis() {
     const apiKey = localStorage.getItem("clockify_api_key");
@@ -48,7 +54,7 @@ export function initializeDashboard(
     }
 
     setStatus("Analyzing...", "loading");
-    analyzeButton.disabled = true;
+    lastFetchTime = Date.now();
 
     try {
       const data = await (electrobun as any).rpc.request.analyzeOvertime({
@@ -58,17 +64,51 @@ export function initializeDashboard(
       lastData = data;
       renderDashboard(data, overtimeValue, content, getCumulativeMode());
       setStatus("", "");
+      if (lastFetchedEl) {
+        lastFetchedEl.textContent = `Last fetched: ${new Date().toLocaleTimeString()}`;
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       setStatus(`Error: ${message}`, "error");
-    } finally {
-      analyzeButton.disabled = false;
     }
   }
 
-  analyzeButton.addEventListener("click", runAnalysis);
-
   yearSelect.addEventListener("change", runAnalysis);
+
+  // Auto-fetch on initial load
+  runAnalysis();
+
+  async function fetchIfApiKeyPresent() {
+    const apiKey = localStorage.getItem("clockify_api_key");
+    if (!apiKey?.trim()) return;
+    await runAnalysis();
+  }
+
+  function startPolling() {
+    if (pollTimer !== null) return;
+    pollTimer = setInterval(fetchIfApiKeyPresent, POLL_INTERVAL_MS);
+  }
+
+  function stopPolling() {
+    if (pollTimer === null) return;
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      if (Date.now() - lastFetchTime >= MIN_REFETCH_ON_VISIBILITY_MS) {
+        fetchIfApiKeyPresent();
+      }
+      startPolling();
+    } else {
+      stopPolling();
+    }
+  });
+
+  if (document.visibilityState === "visible") {
+    startPolling();
+  }
 
   function setStatus(
     message: string,
@@ -272,8 +312,6 @@ function createBarChart(
   svg.setAttribute("width", String(width));
   svg.setAttribute("height", String(height));
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  svg.style.border = "1px solid #f0f0f0";
-  svg.style.borderRadius = "8px";
 
   const rawMax = Math.max(...data, 1);
   // Step must be a divisor of 8 so both 0 and 8 always appear as ticks.
