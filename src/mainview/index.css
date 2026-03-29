@@ -94,13 +94,25 @@ body {
 
 .dashboard-view h1 {
   font-size: 1.5rem;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
+  margin-top: 0;
 }
 
 .dashboard-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 20px;
+}
+
+.dashboard-header > div:first-child {
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.dashboard-header .overtime-card {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .last-fetched {
@@ -368,7 +380,7 @@ svg {
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 525px) {
   .app {
     padding: 14px;
   }
@@ -380,5 +392,9 @@ svg {
 
   .overtime-value {
     font-size: 2.1rem;
+  }
+
+  .overtime-card {
+    text-align: left;
   }
 }
