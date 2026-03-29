@@ -117,6 +117,9 @@ function renderCharts(data: OvertimeData) {
     // Prepare data
     const dailyDates = filledDailyData.map((d) => d.date);
     const actualHours = filledDailyData.map((d) => d.actualHours);
+    const cumulativeHours = filledDailyData.map(
+      (d) => d.cumulativeOvertimeHours,
+    );
 
     // Create display labels (only on month changes)
     const displayLabels = dailyDates.map((date, index) => {
@@ -144,6 +147,7 @@ function renderCharts(data: OvertimeData) {
     // Render bar chart
     const barSvg = createBarChart(
       actualHours,
+      cumulativeHours,
       displayLabels,
       dailyDates,
       "Hours Worked",
@@ -163,6 +167,7 @@ function renderCharts(data: OvertimeData) {
 
 function createBarChart(
   data: number[],
+  cumulativeData: number[],
   labels: string[],
   dates: string[],
   title: string,
@@ -183,6 +188,10 @@ function createBarChart(
 
   const maxValue = Math.max(...data, 1);
   const barWidth = chartWidth / data.length;
+
+  const cumulativeMin = Math.min(...cumulativeData, 0);
+  const cumulativeMax = Math.max(...cumulativeData, 0);
+  const cumulativeRange = cumulativeMax - cumulativeMin || 1;
 
   // Y-axis gridlines
   for (let i = 0; i <= 5; i++) {
@@ -244,6 +253,54 @@ function createBarChart(
     }
   });
 
+  // Draw cumulative overtime line (right Y axis scale)
+  if (cumulativeData.length > 0) {
+    let pathData = "";
+
+    cumulativeData.forEach((value, index) => {
+      const x = padding.left + index * barWidth + barWidth / 2;
+      const normalized = (value - cumulativeMin) / cumulativeRange;
+      const y = padding.top + chartHeight - normalized * chartHeight;
+      pathData += index === 0 ? `M ${x} ${y}` : ` L ${x} ${y}`;
+    });
+
+    const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    line.setAttribute("d", pathData);
+    line.setAttribute("stroke", "#1f6fd1");
+    line.setAttribute("stroke-width", "2");
+    line.setAttribute("fill", "none");
+    line.setAttribute("stroke-linecap", "round");
+    line.setAttribute("stroke-linejoin", "round");
+    svg.appendChild(line);
+
+    // Subtle points for visibility
+    cumulativeData.forEach((value, index) => {
+      const x = padding.left + index * barWidth + barWidth / 2;
+      const normalized = (value - cumulativeMin) / cumulativeRange;
+      const y = padding.top + chartHeight - normalized * chartHeight;
+      const point = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      point.setAttribute("cx", String(x));
+      point.setAttribute("cy", String(y));
+      point.setAttribute("r", "1.5");
+      point.setAttribute("fill", "#1f6fd1");
+      svg.appendChild(point);
+    });
+
+    // Right Y-axis labels for cumulative overtime
+    for (let i = 0; i <= 5; i += 1) {
+      const y = padding.top + (chartHeight / 5) * i;
+      const value = cumulativeMax - (cumulativeRange / 5) * i;
+      const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      text.setAttribute("x", String(padding.left + chartWidth + 10));
+      text.setAttribute("y", String(y + 5));
+      text.setAttribute("text-anchor", "start");
+      text.setAttribute("font-size", "12");
+      text.setAttribute("fill", "#1f6fd1");
+      text.textContent = value.toFixed(1);
+      svg.appendChild(text);
+    }
+  }
+
   // Axes
   const xAxis = document.createElementNS("http://www.w3.org/2000/svg", "line");
   xAxis.setAttribute("x1", String(padding.left));
@@ -262,6 +319,15 @@ function createBarChart(
   yAxis.setAttribute("stroke", "#333");
   yAxis.setAttribute("stroke-width", "1");
   svg.appendChild(yAxis);
+
+  const rightAxis = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  rightAxis.setAttribute("x1", String(padding.left + chartWidth));
+  rightAxis.setAttribute("y1", String(padding.top));
+  rightAxis.setAttribute("x2", String(padding.left + chartWidth));
+  rightAxis.setAttribute("y2", String(padding.top + chartHeight));
+  rightAxis.setAttribute("stroke", "#1f6fd1");
+  rightAxis.setAttribute("stroke-width", "1");
+  svg.appendChild(rightAxis);
 
   return svg;
 }
