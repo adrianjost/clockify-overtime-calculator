@@ -121,7 +121,6 @@ export function initializeDashboard(
   function setLoading(loading: boolean) {
     if (fetchSpinner) fetchSpinner.hidden = !loading;
   }
-
 }
 
 function renderDashboard(
@@ -218,14 +217,14 @@ function renderCharts(data: OvertimeData) {
     // Determine if we should use weekly density instead of daily
     // Use weekly if bars would be less than 8px wide (more fine-grained control)
     const shouldUseWeekly = chartWidth / filledDailyData.length < 8;
-    
+
     // Build cumulative series based on the view mode (daily or weekly)
     const cumulativeMode: CumulativeMode = shouldUseWeekly ? "weekly" : "daily";
     const cumulativeHours = buildCumulativeSeries(
       filledDailyData,
       cumulativeMode,
     );
-    
+
     let dataToUse = actualHours;
     let cumulativeToUse = cumulativeHours;
     let labelsToUse = displayLabels;
@@ -242,7 +241,9 @@ function renderCharts(data: OvertimeData) {
     // Update chart title based on view mode
     const h2Title = dailyContainer.parentElement?.querySelector("h2");
     if (h2Title) {
-      h2Title.textContent = shouldUseWeekly ? "Weekly Working Hours" : "Daily Working Hours";
+      h2Title.textContent = shouldUseWeekly
+        ? "Weekly Working Hours"
+        : "Daily Working Hours";
     }
 
     const barSvg = createBarChart(
@@ -306,7 +307,10 @@ function aggregateToWeekly(
     const indices = weekData.indices;
 
     // Sum actual hours for the week
-    const weekHours = indices.reduce((sum, i) => sum + filledDailyData[i].actualHours, 0);
+    const weekHours = indices.reduce(
+      (sum, i) => sum + filledDailyData[i].actualHours,
+      0,
+    );
     hours.push(weekHours);
 
     // Use Monday (first day of week) as the representative date
@@ -427,7 +431,7 @@ function createBarChart(
   width: number,
   height: number,
 ): SVGSVGElement {
-  const padding = { top: 20, right: 50, bottom: 60, left: 40 };
+  const padding = { top: 20, right: 50, bottom: 15, left: 40 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
 
