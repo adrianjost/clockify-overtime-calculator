@@ -10,6 +10,11 @@ export type AppRPC = {
 					year: number;
 				};
 				response: OvertimeData;
+      };
+      closeApp: {
+        params: {};
+        response: void;
+      };
     };
     messages: {};
   }>;

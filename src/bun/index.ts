@@ -13,6 +13,9 @@ import type { AppRPC } from "../shared/rpc.ts";
 const rpc = BrowserView.defineRPC<AppRPC>({
   handlers: {
     requests: {
+      closeApp: async () => {
+        mainWindow.close();
+      },
       analyzeOvertime: async ({
         apiKey,
         year,

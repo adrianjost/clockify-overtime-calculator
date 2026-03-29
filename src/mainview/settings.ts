@@ -18,6 +18,12 @@ export function initializeSettings(
     apiKeyInput.value = savedApiKey;
   }
 
+  // Hide reset button during initial onboarding (no API key yet)
+  const dangerZone = document.querySelector<HTMLElement>(".settings-danger-zone");
+  if (dangerZone) {
+    dangerZone.style.display = savedApiKey ? "" : "none";
+  }
+
   form.addEventListener("submit", (event) => {
     event.preventDefault();
 
@@ -55,12 +61,7 @@ export function initializeSettings(
       confirmPending = false;
       resetBtn.classList.remove("btn-danger-confirm");
       localStorage.clear();
-      apiKeyInput.value = "";
-      saveStatus.textContent = "";
-      resetBtn.textContent = "✓ Cleared";
-      setTimeout(() => {
-        resetBtn.textContent = "Reset all stored data";
-      }, 2000);
+      (electrobun as any).rpc.request.closeApp({});
     });
   }
 }
