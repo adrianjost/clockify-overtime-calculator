@@ -16,6 +16,7 @@ export function initializeDashboard(
   const overtimeValue =
     document.querySelector<HTMLDivElement>("#overtime-value");
   let lastData: OvertimeData | null = null;
+  let resizeRafId: number | null = null;
 
   if (cumulativeModeToggle) {
     cumulativeModeToggle.checked = false;
@@ -110,6 +111,19 @@ export function initializeDashboard(
     startPolling();
   }
 
+  window.addEventListener("resize", () => {
+    if (!lastData) {
+      return;
+    }
+    if (resizeRafId !== null) {
+      cancelAnimationFrame(resizeRafId);
+    }
+    resizeRafId = requestAnimationFrame(() => {
+      resizeRafId = null;
+      renderDashboard(lastData!, overtimeValue, content, getCumulativeMode());
+    });
+  });
+
   function setLoading(loading: boolean) {
     if (fetchSpinner) fetchSpinner.hidden = !loading;
   }
@@ -195,12 +209,35 @@ function renderCharts(data: OvertimeData, cumulativeMode: CumulativeMode) {
     });
 
     // Render bar chart
+    const chartWidth = Math.max(
+      360,
+      Math.floor(dailyContainer.clientWidth || 800),
+    );
+
+    // Get available height from the charts-container flex space
+    const chartsContainer = document.querySelector<HTMLDivElement>(
+      ".charts-container",
+    );
+    let chartHeight = 300; // default
+    if (chartsContainer) {
+      // Account for chart title (h2) and margins
+      const h2 = dailyContainer.parentElement?.querySelector("h2");
+      const h2Height = h2 ? h2.offsetHeight + 8 : 0;
+      const availableHeight = Math.max(
+        200,
+        chartsContainer.clientHeight - h2Height - 16,
+      );
+      chartHeight = Math.min(400, availableHeight);
+    }
+
     const barSvg = createBarChart(
       actualHours,
       cumulativeHours,
       displayLabels,
       dailyDates,
       "rgba(132, 150, 163, 0.45)",
+      chartWidth,
+      chartHeight,
     );
     dailyContainer.appendChild(barSvg);
 
@@ -295,9 +332,9 @@ function createBarChart(
   labels: string[],
   dates: string[],
   color: string,
+  width: number,
+  height: number,
 ): SVGSVGElement {
-  const width = 800;
-  const height = 300;
   const padding = { top: 20, right: 50, bottom: 60, left: 40 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
@@ -308,9 +345,13 @@ function createBarChart(
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
 
   const rawMax = Math.max(...data, 1);
+  // Coarser ticks on narrow widths or short heights
+  const maxLeftTicks =
+    width < 640 ? 5 : height < 250 ? 5 : 8;
   // Step must be a divisor of 8 so both 0 and 8 always appear as ticks.
   const leftStep =
-    ([2, 4, 8] as const).find((s) => Math.ceil(rawMax / s) <= 8) ?? 8;
+    ([2, 4, 8] as const).find((s) => Math.ceil(rawMax / s) <= maxLeftTicks) ??
+    8;
   const leftMax = Math.ceil(rawMax / leftStep) * leftStep;
   const barWidth = chartWidth / data.length;
 
@@ -318,9 +359,12 @@ function createBarChart(
   const rawCumMin = Math.min(...cumulativeData, 0);
   const rawCumMax = Math.max(...cumulativeData, 0);
   const rawCumRange = rawCumMax - rawCumMin || 1;
+  const maxRightTicks =
+    width < 640 ? 5 : height < 250 ? 5 : 8;
   const rightStep =
-    ([1, 2, 5, 10, 20, 50, 100] as const).find((s) => rawCumRange / s <= 8) ??
-    100;
+    ([1, 2, 5, 10, 20, 50, 100] as const).find(
+      (s) => rawCumRange / s <= maxRightTicks,
+    ) ?? 100;
   const cumulativeMin = Math.floor(rawCumMin / rightStep) * rightStep;
   const cumulativeMax = Math.ceil(rawCumMax / rightStep) * rightStep;
   const cumulativeRange = cumulativeMax - cumulativeMin || 1;
@@ -339,6 +383,9 @@ function createBarChart(
   }
 
   // Bars
+  let lastLabelX = Number.NEGATIVE_INFINITY;
+  const minLabelSpacing = width < 640 ? 56 : 44;
+
   data.forEach((value, index) => {
     const barHeight = (value / leftMax) * chartHeight;
     const x = padding.left + index * barWidth + barWidth * 0.1;
@@ -362,18 +409,20 @@ function createBarChart(
     svg.appendChild(rect);
 
     // X-axis labels
-    if (labels[index]) {
+    const labelX = x + actualBarWidth / 2;
+    if (labels[index] && labelX - lastLabelX >= minLabelSpacing) {
       const text = document.createElementNS(
         "http://www.w3.org/2000/svg",
         "text",
       );
-      text.setAttribute("x", String(x + actualBarWidth / 2));
+      text.setAttribute("x", String(labelX));
       text.setAttribute("y", String(padding.top + chartHeight + 15));
       text.setAttribute("text-anchor", "middle");
       text.setAttribute("font-size", "12");
       text.setAttribute("fill", "#666");
       text.textContent = labels[index];
       svg.appendChild(text);
+      lastLabelX = labelX;
     }
   });
 

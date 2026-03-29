@@ -146,6 +146,7 @@ body {
   color: inherit;
   width: 4ch;
   text-align: left;
+  appearance: textfield;
   -moz-appearance: textfield;
   line-height: inherit;
   vertical-align: baseline;
@@ -330,11 +331,14 @@ body {
   margin-top: 0;
 }
 
-canvas,
-svg {
+canvas {
   max-width: 100%;
   height: auto;
   width: 100%;
+}
+
+svg {
+  display: block;
 }
 
 #status-message {
