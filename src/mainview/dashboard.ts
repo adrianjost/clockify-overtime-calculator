@@ -10,23 +10,11 @@ export function initializeDashboard(
   const yearSelect = document.querySelector<HTMLInputElement>("#year-select");
   const lastFetchedEl = document.querySelector<HTMLDivElement>("#last-fetched");
   const fetchSpinner = document.querySelector<HTMLElement>("#fetch-spinner");
-  const cumulativeModeToggle =
-    document.querySelector<HTMLInputElement>("#cumulative-mode");
   const content = document.querySelector<HTMLDivElement>("#content");
   const overtimeValue =
     document.querySelector<HTMLDivElement>("#overtime-value");
   let lastData: OvertimeData | null = null;
   let resizeRafId: number | null = null;
-
-  if (cumulativeModeToggle) {
-    cumulativeModeToggle.checked = false;
-    cumulativeModeToggle.addEventListener("change", () => {
-      if (!lastData) {
-        return;
-      }
-      renderDashboard(lastData, overtimeValue, content, getCumulativeMode());
-    });
-  }
 
   if (!yearSelect) {
     throw new Error("Dashboard elements are missing");
@@ -64,7 +52,7 @@ export function initializeDashboard(
         year,
       });
       lastData = data;
-      renderDashboard(data, overtimeValue, content, getCumulativeMode());
+      renderDashboard(data, overtimeValue, content);
       setLoading(false);
       if (lastFetchedEl) {
         lastFetchedEl.textContent = `Last fetched: ${new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
@@ -126,7 +114,7 @@ export function initializeDashboard(
     }
     resizeRafId = requestAnimationFrame(() => {
       resizeRafId = null;
-      renderDashboard(lastData!, overtimeValue, content, getCumulativeMode());
+      renderDashboard(lastData!, overtimeValue, content);
     });
   });
 
@@ -134,16 +122,12 @@ export function initializeDashboard(
     if (fetchSpinner) fetchSpinner.hidden = !loading;
   }
 
-  function getCumulativeMode(): CumulativeMode {
-    return cumulativeModeToggle?.checked ? "weekly" : "daily";
-  }
 }
 
 function renderDashboard(
   data: OvertimeData,
   overtimeValue: HTMLDivElement | null,
   content: HTMLDivElement | null,
-  cumulativeMode: CumulativeMode,
 ) {
   if (!overtimeValue || !content) return;
 
@@ -160,10 +144,10 @@ function renderDashboard(
   content.style.display = "block";
 
   // Render charts
-  renderCharts(data, cumulativeMode);
+  renderCharts(data);
 }
 
-function renderCharts(data: OvertimeData, cumulativeMode: CumulativeMode) {
+function renderCharts(data: OvertimeData) {
   try {
     console.log("Rendering charts with data:", {
       totalOvertimeHours: data.totalOvertimeHours,
@@ -187,10 +171,6 @@ function renderCharts(data: OvertimeData, cumulativeMode: CumulativeMode) {
     // Prepare data
     const dailyDates = filledDailyData.map((d) => d.date);
     const actualHours = filledDailyData.map((d) => d.actualHours);
-    const cumulativeHours = buildCumulativeSeries(
-      filledDailyData,
-      cumulativeMode,
-    );
 
     // Create display labels (only on month changes)
     const displayLabels = dailyDates.map((date, index) => {
@@ -238,6 +218,14 @@ function renderCharts(data: OvertimeData, cumulativeMode: CumulativeMode) {
     // Determine if we should use weekly density instead of daily
     // Use weekly if bars would be less than 8px wide (more fine-grained control)
     const shouldUseWeekly = chartWidth / filledDailyData.length < 8;
+    
+    // Build cumulative series based on the view mode (daily or weekly)
+    const cumulativeMode: CumulativeMode = shouldUseWeekly ? "weekly" : "daily";
+    const cumulativeHours = buildCumulativeSeries(
+      filledDailyData,
+      cumulativeMode,
+    );
+    
     let dataToUse = actualHours;
     let cumulativeToUse = cumulativeHours;
     let labelsToUse = displayLabels;
