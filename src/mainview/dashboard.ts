@@ -144,6 +144,8 @@ export function initializeDashboard(
     focusRange = null;
     if (lastData) renderDashboard(lastData, overtimeValue, content);
   });
+
+  return { runAnalysis };
 }
 
 function renderDashboard(
