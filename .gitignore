@@ -4,6 +4,7 @@ bun.lock
 
 # Build
 build/
+icon.iconset/
 
 # Environment
 .env

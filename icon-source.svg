@@ -1,0 +1,28 @@
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <!-- Full background in lighter friendly blue (edge to edge) -->
+  <rect width="64" height="64" fill="#4A90E2"/>
+  
+  <!-- Large white circle background for clock -->
+  <circle cx="32" cy="32" r="26" fill="white"/>
+  
+  <!-- Clock circle outline - subtle light blue -->
+  <circle cx="32" cy="32" r="26" fill="none" stroke="#4A90E2" stroke-width="2"/>
+  
+  <!-- Hour hand - even bolder blue -->
+  <line x1="32" y1="32" x2="32" y2="13" stroke="#4A90E2" stroke-width="4.5" stroke-linecap="round"/>
+  
+  <!-- Minute hand - even bolder blue, slightly longer -->
+  <line x1="32" y1="32" x2="46" y2="18" stroke="#4A90E2" stroke-width="4" stroke-linecap="round"/>
+  
+  <!-- Center dot - blue -->
+  <circle cx="32" cy="32" r="3.5" fill="#4A90E2"/>
+  
+  <!-- Plus accent - larger for overtime indicator top-right -->
+  <g transform="translate(50, 16)">
+    <circle cx="0" cy="0" r="9.5" fill="#FF6B6B"/>
+    <line x1="-4" y1="0" x2="4" y2="0" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="0" y1="-4" x2="0" y2="4" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+</svg>
+
+
