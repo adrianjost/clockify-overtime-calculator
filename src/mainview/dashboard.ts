@@ -50,7 +50,7 @@ export function initializeDashboard(
       return;
     }
 
-    const year = Number.parseInt(yearSelect.value, 10);
+    const year = Number.parseInt(yearSelect!.value, 10);
     if (Number.isNaN(year) || year < 1970 || year > 3000) {
       return;
     }
@@ -221,9 +221,8 @@ function renderCharts(data: OvertimeData, cumulativeMode: CumulativeMode) {
     );
 
     // Get available height from the charts-container flex space
-    const chartsContainer = document.querySelector<HTMLDivElement>(
-      ".charts-container",
-    );
+    const chartsContainer =
+      document.querySelector<HTMLDivElement>(".charts-container");
     let chartHeight = 300; // default
     if (chartsContainer) {
       // Account for chart title (h2) and margins
@@ -236,11 +235,33 @@ function renderCharts(data: OvertimeData, cumulativeMode: CumulativeMode) {
       chartHeight = Math.min(400, availableHeight);
     }
 
+    // Determine if we should use weekly density instead of daily
+    // Use weekly if bars would be less than 8px wide (more fine-grained control)
+    const shouldUseWeekly = chartWidth / filledDailyData.length < 8;
+    let dataToUse = actualHours;
+    let cumulativeToUse = cumulativeHours;
+    let labelsToUse = displayLabels;
+    let datesToUse = dailyDates;
+
+    if (shouldUseWeekly) {
+      const weeklyData = aggregateToWeekly(filledDailyData, cumulativeHours);
+      dataToUse = weeklyData.hours;
+      cumulativeToUse = weeklyData.cumulative;
+      labelsToUse = weeklyData.labels;
+      datesToUse = weeklyData.dates;
+    }
+
+    // Update chart title based on view mode
+    const h2Title = dailyContainer.parentElement?.querySelector("h2");
+    if (h2Title) {
+      h2Title.textContent = shouldUseWeekly ? "Weekly Working Hours" : "Daily Working Hours";
+    }
+
     const barSvg = createBarChart(
-      actualHours,
-      cumulativeHours,
-      displayLabels,
-      dailyDates,
+      dataToUse,
+      cumulativeToUse,
+      labelsToUse,
+      datesToUse,
       "rgba(132, 150, 163, 0.45)",
       chartWidth,
       chartHeight,
@@ -254,6 +275,83 @@ function renderCharts(data: OvertimeData, cumulativeMode: CumulativeMode) {
       console.error("Stack trace:", error.stack);
     }
   }
+}
+
+function aggregateToWeekly(
+  filledDailyData: OvertimeData["dailyData"],
+  cumulativeData: number[],
+): {
+  hours: number[];
+  cumulative: number[];
+  labels: string[];
+  dates: string[];
+} {
+  // Group daily data by ISO week (Monday-based)
+  const weekKeyToData = new Map<
+    string,
+    { indices: number[]; startDate: string; endDate: string }
+  >();
+  const weekOrder: string[] = [];
+
+  filledDailyData.forEach((d, index) => {
+    const weekKey = getWeekKey(d.date);
+    if (!weekKeyToData.has(weekKey)) {
+      weekKeyToData.set(weekKey, {
+        indices: [],
+        startDate: d.date,
+        endDate: d.date,
+      });
+      weekOrder.push(weekKey);
+    }
+    const weekData = weekKeyToData.get(weekKey)!;
+    weekData.indices.push(index);
+    weekData.endDate = d.date; // Update to latest date in week
+  });
+
+  // Aggregate hours for each week
+  const hours: number[] = [];
+  const dates: string[] = [];
+  const cumulative: number[] = [];
+
+  for (const weekKey of weekOrder) {
+    const weekData = weekKeyToData.get(weekKey)!;
+    const indices = weekData.indices;
+
+    // Sum actual hours for the week
+    const weekHours = indices.reduce((sum, i) => sum + filledDailyData[i].actualHours, 0);
+    hours.push(weekHours);
+
+    // Use Monday (first day of week) as the representative date
+    dates.push(weekData.startDate);
+
+    // Cumulative is taken from the provided cumulative array (respects mode: daily/weekly)
+    // Use the last index of the week to get the cumulative at week's end
+    cumulative.push(cumulativeData[indices[indices.length - 1]]);
+  }
+
+  // Create labels (show first week only, or month changes)
+  const labels = dates.map((date, index) => {
+    const current = new Date(date);
+    let previousMonth = -1;
+
+    if (index > 0) {
+      const previous = new Date(dates[index - 1]);
+      previousMonth = previous.getMonth();
+    }
+
+    const currentMonth = current.getMonth();
+    const isNewMonth = currentMonth !== previousMonth;
+    const isFirstEntry = index === 0;
+
+    if (isFirstEntry || isNewMonth) {
+      return current.toLocaleDateString("en-US", {
+        month: "short",
+      });
+    }
+    return "";
+  });
+
+  return { hours, cumulative, labels, dates };
 }
 
 function buildCumulativeSeries(
@@ -352,8 +450,7 @@ function createBarChart(
 
   const rawMax = Math.max(...data, 1);
   // Coarser ticks on narrow widths or short heights
-  const maxLeftTicks =
-    width < 640 ? 5 : height < 250 ? 5 : 8;
+  const maxLeftTicks = width < 640 ? 5 : height < 250 ? 5 : 8;
   // Step must be a divisor of 8 so both 0 and 8 always appear as ticks.
   const leftStep =
     ([2, 4, 8] as const).find((s) => Math.ceil(rawMax / s) <= maxLeftTicks) ??
@@ -365,8 +462,7 @@ function createBarChart(
   const rawCumMin = Math.min(...cumulativeData, 0);
   const rawCumMax = Math.max(...cumulativeData, 0);
   const rawCumRange = rawCumMax - rawCumMin || 1;
-  const maxRightTicks =
-    width < 640 ? 5 : height < 250 ? 5 : 8;
+  const maxRightTicks = width < 640 ? 5 : height < 250 ? 5 : 8;
   const rightStep =
     ([1, 2, 5, 10, 20, 50, 100] as const).find(
       (s) => rawCumRange / s <= maxRightTicks,
