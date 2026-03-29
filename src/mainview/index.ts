@@ -21,6 +21,12 @@ if (!form || !apiKeyInput || !yearInput || !output || !status || !button) {
   throw new Error("Required UI elements are missing.");
 }
 
+// Load persisted API key from localStorage
+const savedApiKey = localStorage.getItem("clockify_api_key");
+if (savedApiKey) {
+  apiKeyInput.value = savedApiKey;
+}
+
 yearInput.value = new Date().getFullYear().toString();
 
 form.addEventListener("submit", async (event) => {
@@ -29,6 +35,11 @@ form.addEventListener("submit", async (event) => {
   if (Number.isNaN(year)) {
     status.textContent = "Please enter a valid year.";
     return;
+  }
+
+  // Save API key to localStorage for next time
+  if (apiKeyInput.value.trim()) {
+    localStorage.setItem("clockify_api_key", apiKeyInput.value);
   }
 
   status.textContent = "Running analysis...";
