@@ -46,6 +46,15 @@ const rpc = BrowserView.defineRPC<AppRPC>({
 
 ApplicationMenu.setApplicationMenu([
   { submenu: [{ label: "Quit", role: "quit" }] },
+  {
+    label: "Edit",
+    submenu: [
+      { label: "Cut", role: "cut" },
+      { label: "Copy", role: "copy" },
+      { label: "Paste", role: "paste" },
+      { label: "Select All", role: "selectAll" },
+    ],
+  },
 ]);
 
 const WINDOW_MARGIN = 24;
