@@ -32,4 +32,35 @@ export function initializeSettings(
       }, 1000);
     }
   });
+
+  const resetBtn = document.querySelector<HTMLButtonElement>("#reset-all-btn");
+  if (resetBtn) {
+    let confirmPending = false;
+    let confirmTimer: ReturnType<typeof setTimeout> | null = null;
+
+    resetBtn.addEventListener("click", () => {
+      if (!confirmPending) {
+        confirmPending = true;
+        resetBtn.textContent = "Click again to confirm";
+        resetBtn.classList.add("btn-danger-confirm");
+        confirmTimer = setTimeout(() => {
+          confirmPending = false;
+          resetBtn.textContent = "Reset all stored data";
+          resetBtn.classList.remove("btn-danger-confirm");
+        }, 3000);
+        return;
+      }
+
+      if (confirmTimer) clearTimeout(confirmTimer);
+      confirmPending = false;
+      resetBtn.classList.remove("btn-danger-confirm");
+      localStorage.clear();
+      apiKeyInput.value = "";
+      saveStatus.textContent = "";
+      resetBtn.textContent = "✓ Cleared";
+      setTimeout(() => {
+        resetBtn.textContent = "Reset all stored data";
+      }, 2000);
+    });
+  }
 }
