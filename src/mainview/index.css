@@ -100,9 +100,28 @@ body {
 }
 
 .header-controls input {
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  padding: 0;
+  border: none;
+  border-bottom: 1.5px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text);
+  width: 4ch;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.header-controls input::-webkit-inner-spin-button,
+.header-controls input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+}
+
+.header-controls input:hover,
+.header-controls input:focus {
+  outline: none;
+  border-bottom-color: var(--text-muted);
 }
 
 .header-controls select {

@@ -35,7 +35,7 @@ export function initializeDashboard(
 
   yearSelect.value = new Date().getFullYear().toString();
 
-  analyzeButton.addEventListener("click", async () => {
+  async function runAnalysis() {
     const apiKey = localStorage.getItem("clockify_api_key");
     if (!apiKey?.trim()) {
       onNavigateToSettings();
@@ -43,8 +43,7 @@ export function initializeDashboard(
     }
 
     const year = Number.parseInt(yearSelect.value, 10);
-    if (Number.isNaN(year)) {
-      setStatus("Please enter a valid year", "error");
+    if (Number.isNaN(year) || year < 1970 || year > 3000) {
       return;
     }
 
@@ -65,10 +64,11 @@ export function initializeDashboard(
     } finally {
       analyzeButton.disabled = false;
     }
-  });
+  }
 
-  // Note: Auto-trigger disabled to prevent stack overflow
-  // User can manually click Analyze or it will auto-load on next session
+  analyzeButton.addEventListener("click", runAnalysis);
+
+  yearSelect.addEventListener("change", runAnalysis);
 
   function setStatus(
     message: string,
