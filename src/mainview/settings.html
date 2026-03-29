@@ -1,0 +1,25 @@
+<div class="settings-view">
+  <div class="settings-header">
+    <h1>Settings</h1>
+  </div>
+
+  <form id="settings-form" class="settings-form">
+    <div class="form-group">
+      <label for="api-key">Clockify API Key</label>
+      <input
+        id="api-key"
+        name="apiKey"
+        type="password"
+        required
+        placeholder="Paste your API key from https://clockify.me/user/settings"
+        autocomplete="off"
+      />
+      <p class="hint">Your API key is stored locally and never sent anywhere else.</p>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn-primary">Save API Key</button>
+      <span id="save-status"></span>
+    </div>
+  </form>
+</div>

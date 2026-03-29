@@ -7,6 +7,9 @@ export default {
     version: "0.1.0",
   },
   build: {
+    bun: {
+      entrypoint: "src/bun/index.ts",
+    },
     views: {
       mainview: {
         entrypoint: "src/mainview/index.ts",

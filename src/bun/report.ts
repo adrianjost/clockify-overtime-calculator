@@ -3,6 +3,63 @@ import { formatDuration } from "./date.ts";
 
 const durationPerWorkday = Temporal.Duration.from({ hours: 8 });
 
+export interface OvertimeData {
+  totalOvertimeHours: number;
+  totalOvertimeMinutes: number;
+  dailyData: Array<{
+    date: string;
+    actualHours: number;
+    expectedHours: number;
+    cumulativeOvertimeHours: number;
+  }>;
+}
+
+export function buildOvertimeData(
+  year: number,
+  data: Map<string, Temporal.Duration>,
+): OvertimeData {
+  const dailyData: OvertimeData['dailyData'] = [];
+  let expectedWorkDuration = Temporal.Duration.from({ hours: 0 });
+  let actualWorkDuration = Temporal.Duration.from({ hours: 0 });
+  const today = Temporal.Now.plainDateISO();
+
+  for (let i = 0; ; i += 1) {
+    const day = Temporal.PlainDate.from({ year, month: 1, day: 1 }).add({
+      days: i,
+    });
+    if (Temporal.PlainDate.compare(day, today) > 0) {
+      break;
+    }
+
+    const workDuration = data.get(day.toString());
+    if (workDuration) {
+      let expectedHours = 0;
+      if (day.dayOfWeek !== 6 && day.dayOfWeek !== 7) {
+        expectedWorkDuration = expectedWorkDuration.add(durationPerWorkday);
+        expectedHours = 8;
+      }
+      actualWorkDuration = actualWorkDuration.add(workDuration);
+      const cumulativeOvertime = actualWorkDuration.subtract(
+        expectedWorkDuration,
+      );
+      dailyData.push({
+        date: day.toString(),
+        actualHours: workDuration.hours + workDuration.minutes / 60,
+        expectedHours,
+        cumulativeOvertimeHours:
+          cumulativeOvertime.hours + cumulativeOvertime.minutes / 60,
+      });
+    }
+  }
+
+  const totalOvertime = actualWorkDuration.subtract(expectedWorkDuration);
+  return {
+    totalOvertimeHours: totalOvertime.hours,
+    totalOvertimeMinutes: totalOvertime.minutes,
+    dailyData,
+  };
+}
+
 function formatOvertime(overtime: Temporal.Duration): string {
   const overtimeSign = overtime.sign >= 0 ? "+" : "-";
   const overtimeFormatted = formatDuration(overtime.abs(), "hoursMinutes");

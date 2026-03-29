@@ -5,50 +5,64 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Clockify Overtime</title>
     <link rel="stylesheet" href="index.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
-  <body>
-    <div class="shell">
-      <header>
-        <h1>Clockify Overtime Calculator</h1>
-        <p>
-          Enter your API key and year, then run the same overtime analysis
-          report in this app.
-        </p>
-      </header>
+  <body style="margin: 0; padding: 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+    <div class="app">
+      <!-- Settings View -->
+      <div id="settings-container" class="settings-view">
+        <h1>Settings</h1>
+        <form id="settings-form" class="settings-form">
+          <div class="form-group">
+            <label for="api-key">Clockify API Key</label>
+            <input
+              id="api-key"
+              type="password"
+              required
+              placeholder="Paste your API key from https://clockify.me/user/settings"
+              autocomplete="off"
+            />
+            <p class="hint">Your API key is stored locally and never sent anywhere else.</p>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Save API Key</button>
+            <span id="save-status"></span>
+          </div>
+        </form>
+      </div>
 
-      <form id="analyze-form" autocomplete="off">
-        <label for="api-key">Clockify API Key</label>
-        <input
-          id="api-key"
-          name="apiKey"
-          type="password"
-          required
-          placeholder="Paste API key"
-        />
-
-        <label for="year">Year</label>
-        <input
-          id="year"
-          name="year"
-          type="number"
-          min="1970"
-          max="3000"
-          required
-        />
-
-        <div class="actions">
-          <button id="analyze-button" type="submit">Analyze</button>
-          <span id="status"></span>
+      <!-- Dashboard View -->
+      <div id="dashboard-container" class="dashboard-view" style="display: none;">
+        <div class="dashboard-header">
+          <h1>Overtime Report</h1>
+          <div class="header-controls">
+            <label for="year-select">Year:</label>
+            <input id="year-select" type="number" min="1970" max="3000" />
+            <button id="analyze-button" class="btn-primary">Analyze</button>
+            <a href="#settings" class="btn-secondary">Settings</a>
+          </div>
         </div>
-      </form>
 
-      <section>
-        <h2>Output</h2>
-        <pre id="output">Report output will appear here.</pre>
-      </section>
+        <div id="status-message"></div>
 
-      <div class="footer">
-        <p>The report format matches the CLI output in plain text.</p>
+        <div id="content" style="display: none">
+          <div class="overtime-card">
+            <div class="overtime-label">Total Overtime</div>
+            <div class="overtime-value" id="overtime-value">0h 0min</div>
+          </div>
+
+          <div class="charts-container">
+            <div class="chart-card">
+              <h2>Daily Working Hours</h2>
+              <canvas id="daily-chart"></canvas>
+            </div>
+
+            <div class="chart-card">
+              <h2>Cumulative Overtime</h2>
+              <canvas id="cumulative-chart"></canvas>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <script src="views://mainview/index.js"></script>
