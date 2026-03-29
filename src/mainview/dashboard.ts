@@ -283,6 +283,7 @@ function renderCharts(data: OvertimeData) {
     let labelsToUse = displayLabels;
     let datesToUse = dailyDates;
     let weeklyReferenceHoursToUse: number[] | undefined;
+    let weeklyEndDatesToUse: string[] | undefined;
 
     if (shouldUseWeekly) {
       const weeklyData = aggregateToWeekly(visibleData, cumulativeHours);
@@ -291,6 +292,7 @@ function renderCharts(data: OvertimeData) {
       labelsToUse = weeklyData.labels;
       datesToUse = weeklyData.dates;
       weeklyReferenceHoursToUse = weeklyData.referenceHours;
+      weeklyEndDatesToUse = weeklyData.endDates;
     }
 
     // Update chart title; show date range + reset button when zoomed
@@ -340,6 +342,7 @@ function renderCharts(data: OvertimeData) {
       chartHeight,
       shouldUseWeekly,
       weeklyReferenceHoursToUse,
+      weeklyEndDatesToUse,
     );
     dailyContainer.appendChild(barSvg);
 
@@ -360,6 +363,7 @@ function aggregateToWeekly(
   cumulative: number[];
   labels: string[];
   dates: string[];
+  endDates: string[];
   referenceHours: number[];
 } {
   // Group daily data by ISO week (Monday-based)
@@ -387,6 +391,7 @@ function aggregateToWeekly(
   // Aggregate hours for each week
   const hours: number[] = [];
   const dates: string[] = [];
+  const endDates: string[] = [];
   const cumulative: number[] = [];
   const referenceHours: number[] = [];
 
@@ -403,6 +408,7 @@ function aggregateToWeekly(
 
     // Use Monday (first day of week) as the representative date
     dates.push(weekData.startDate);
+    endDates.push(weekData.endDate);
 
     // Weekly reference: 8h for each day with recorded work in this week.
     const workedDays = indices.filter(
@@ -437,7 +443,7 @@ function aggregateToWeekly(
     return "";
   });
 
-  return { hours, cumulative, labels, dates, referenceHours };
+  return { hours, cumulative, labels, dates, endDates, referenceHours };
 }
 
 function buildCumulativeSeries(
@@ -655,6 +661,7 @@ function createBarChart(
   height: number,
   isWeeklyView: boolean,
   weeklyReferenceHours?: number[],
+  weeklyEndDates?: string[],
 ): SVGSVGElement {
   const padding = { top: 20, right: 25, bottom: 15, left: 25 };
   const chartWidth = width - padding.left - padding.right;
@@ -725,7 +732,12 @@ function createBarChart(
     rect.setAttribute("data-date", dates[index] || "");
     rect.setAttribute("data-hours", String(value));
     rect.addEventListener("mouseenter", (e) =>
-      showChartTooltip(e, dates[index] || "", value),
+      showChartTooltip(
+        e,
+        dates[index] || "",
+        value,
+        isWeeklyView ? weeklyEndDates?.[index] : undefined,
+      ),
     );
     rect.addEventListener("mouseleave", hideChartTooltip);
     svg.appendChild(rect);
@@ -950,7 +962,13 @@ function formatIsoDate(date: Date): string {
 
 let activeTooltip: HTMLElement | null = null;
 
-function showChartTooltip(event: MouseEvent, dateStr: string, hours: number) {
+function formatHoursToHoursAndMinutes(hours: number): string {
+  const wholeHours = Math.floor(hours);
+  const minutes = Math.round((hours - wholeHours) * 60);
+  return `${wholeHours}h ${minutes}min`;
+}
+
+function showChartTooltip(event: MouseEvent, dateStr: string, hours: number, endDate?: string) {
   // Remove existing tooltip
   if (activeTooltip) {
     activeTooltip.remove();
@@ -968,17 +986,37 @@ function showChartTooltip(event: MouseEvent, dateStr: string, hours: number) {
       z-index: 1000;
       white-space: nowrap;
       box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      user-select: none;
     `;
 
-  const displayDate = dateStr
-    ? new Date(dateStr).toLocaleDateString("en-US", {
-        weekday: "short",
+  let displayDate = "";
+  if (endDate) {
+    // For weekly view: show date range
+    const startDateObj = dateStr ? new Date(dateStr) : null;
+    const endDateObj = endDate ? new Date(endDate) : null;
+    if (startDateObj && endDateObj) {
+      const startFormatted = startDateObj.toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
-      })
-    : "";
+      });
+      const endFormatted = endDateObj.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
+      displayDate = `${startFormatted} - ${endFormatted}`;
+    }
+  } else {
+    // For daily view: show single date
+    displayDate = dateStr
+      ? new Date(dateStr).toLocaleDateString("en-US", {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+        })
+      : "";
+  }
 
-  tooltip.textContent = `${displayDate}: ${hours.toFixed(2)}h`;
+  tooltip.textContent = `${displayDate}: ${formatHoursToHoursAndMinutes(hours)}`;
   document.body.appendChild(tooltip);
 
   // Position tooltip above the bars

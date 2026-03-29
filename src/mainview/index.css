@@ -286,7 +286,9 @@ body {
   color: var(--danger);
   font-weight: 600;
   cursor: pointer;
-  transition: background 120ms, color 120ms;
+  transition:
+    background 120ms,
+    color 120ms;
 }
 
 .btn-danger:hover,
@@ -347,6 +349,7 @@ body {
   flex: 1;
   min-height: 0;
   gap: 12px;
+  user-select: none;
 }
 
 .chart-card {
@@ -356,6 +359,7 @@ body {
   border-radius: 0;
   display: flex;
   flex-direction: column;
+  user-select: none;
 }
 
 .chart-card h2 {

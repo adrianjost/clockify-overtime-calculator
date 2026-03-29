@@ -28,7 +28,9 @@ try {
     execSync("which convert", { stdio: "ignore" });
     convertTool = "convert";
   } catch {
-    console.error("❌ Error: Neither ImageMagick (convert) nor librsvg (rsvg-convert) is installed");
+    console.error(
+      "❌ Error: Neither ImageMagick (convert) nor librsvg (rsvg-convert) is installed",
+    );
     console.error("   On macOS, install with: brew install imagemagick");
     console.error("   Or: brew install librsvg");
     process.exit(1);
@@ -50,13 +52,19 @@ for (const size of sizes) {
 
     try {
       if (convertTool === "convert") {
-        execSync(`convert -density 300 -resize ${actualSize}x${actualSize} -background none "${logoSvgPath}" "${outputPath}"`, {
-          stdio: "pipe",
-        });
+        execSync(
+          `convert -density 300 -resize ${actualSize}x${actualSize} -background none "${logoSvgPath}" "${outputPath}"`,
+          {
+            stdio: "pipe",
+          },
+        );
       } else {
-        execSync(`rsvg-convert -w ${actualSize} -h ${actualSize} "${logoSvgPath}" -o "${outputPath}"`, {
-          stdio: "pipe",
-        });
+        execSync(
+          `rsvg-convert -w ${actualSize} -h ${actualSize} "${logoSvgPath}" -o "${outputPath}"`,
+          {
+            stdio: "pipe",
+          },
+        );
       }
     } catch (error) {
       console.error(`Failed to convert ${filename}`);

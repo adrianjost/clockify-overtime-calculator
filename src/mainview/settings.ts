@@ -19,7 +19,9 @@ export function initializeSettings(
   }
 
   // Hide reset button during initial onboarding (no API key yet)
-  const dangerZone = document.querySelector<HTMLElement>(".settings-danger-zone");
+  const dangerZone = document.querySelector<HTMLElement>(
+    ".settings-danger-zone",
+  );
   if (dangerZone) {
     dangerZone.style.display = savedApiKey ? "" : "none";
   }
