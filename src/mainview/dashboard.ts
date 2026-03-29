@@ -32,7 +32,10 @@ export function initializeDashboard(
     throw new Error("Dashboard elements are missing");
   }
 
-  yearSelect.value = new Date().getFullYear().toString();
+  // Load saved year from localStorage, default to current year
+  const savedYear = localStorage.getItem("clockify_viewed_year");
+  const defaultYear = new Date().getFullYear().toString();
+  yearSelect.value = savedYear || defaultYear;
 
   // Polling state — declared before runAnalysis so the closure can reference them
   const POLL_INTERVAL_MS = 5 * 60 * 1000;
@@ -74,7 +77,10 @@ export function initializeDashboard(
     }
   }
 
-  yearSelect.addEventListener("change", runAnalysis);
+  yearSelect.addEventListener("change", () => {
+    localStorage.setItem("clockify_viewed_year", yearSelect.value);
+    runAnalysis();
+  });
 
   // Auto-fetch on initial load
   runAnalysis();
