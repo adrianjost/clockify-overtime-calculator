@@ -4,6 +4,8 @@ import {
   BrowserWindow,
   Screen,
 } from "electrobun/bun";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { fetchActiveUser, fetchYear } from "./clockify.ts";
 import { buildOvertimeData } from "./report.ts";
 import type { AppRPC } from "../shared/rpc.ts";
@@ -46,21 +48,114 @@ ApplicationMenu.setApplicationMenu([
   { submenu: [{ label: "Quit", role: "quit" }] },
 ]);
 
-const WINDOW_WIDTH = 980;
-const WINDOW_HEIGHT = 525;
 const WINDOW_MARGIN = 24;
-const primaryDisplay = Screen.getPrimaryDisplay();
+const MIN_WINDOW_WIDTH = 400;
+const MIN_WINDOW_HEIGHT = 450;
+const WINDOW_WIDTH = MIN_WINDOW_WIDTH;
+const WINDOW_HEIGHT = MIN_WINDOW_HEIGHT;
 
-new BrowserWindow({
+const WINDOW_STATE_DIR = join(
+  Bun.env["HOME"] ?? process.cwd(),
+  ".clockify-overtime",
+);
+const WINDOW_STATE_FILE = join(WINDOW_STATE_DIR, "window-state.json");
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function loadStoredWindowSize(workArea: { width: number; height: number }): {
+  width: number;
+  height: number;
+} {
+  const fallback = {
+    width: WINDOW_WIDTH,
+    height: WINDOW_HEIGHT,
+  };
+
+  try {
+    const raw = readFileSync(WINDOW_STATE_FILE, "utf8");
+    const parsed = JSON.parse(raw) as Partial<{
+      width: number;
+      height: number;
+    }>;
+
+    if (
+      typeof parsed.width !== "number" ||
+      !Number.isFinite(parsed.width) ||
+      typeof parsed.height !== "number" ||
+      !Number.isFinite(parsed.height)
+    ) {
+      return fallback;
+    }
+
+    return {
+      width: clamp(parsed.width, MIN_WINDOW_WIDTH, workArea.width),
+      height: clamp(parsed.height, MIN_WINDOW_HEIGHT, workArea.height),
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function persistWindowSize(width: number, height: number): void {
+  try {
+    mkdirSync(WINDOW_STATE_DIR, { recursive: true });
+    writeFileSync(
+      WINDOW_STATE_FILE,
+      JSON.stringify({ width, height }, null, 2),
+      "utf8",
+    );
+  } catch {
+    // Best effort persistence.
+  }
+}
+
+const primaryDisplay = Screen.getPrimaryDisplay();
+const windowSize = loadStoredWindowSize(primaryDisplay.workArea);
+
+const mainWindow = new BrowserWindow({
   title: "Clockify Overtime",
   url: "views://mainview/index.html",
   rpc,
   frame: {
-    width: WINDOW_WIDTH,
-    height: WINDOW_HEIGHT,
+    width: windowSize.width,
+    height: windowSize.height,
     x:
       primaryDisplay.workArea.x +
-      Math.max(0, primaryDisplay.workArea.width - WINDOW_WIDTH - WINDOW_MARGIN),
+      Math.max(
+        0,
+        primaryDisplay.workArea.width - windowSize.width - WINDOW_MARGIN,
+      ),
     y: primaryDisplay.workArea.y + WINDOW_MARGIN,
   },
+});
+
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+
+mainWindow.on("resize", (event: unknown) => {
+  const data = (event as { data?: { width?: number; height?: number } })?.data;
+
+  if (
+    typeof data?.width !== "number" ||
+    !Number.isFinite(data.width) ||
+    typeof data?.height !== "number" ||
+    !Number.isFinite(data.height)
+  ) {
+    return;
+  }
+
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+  }
+
+  persistTimer = setTimeout(() => {
+    persistWindowSize(data.width!, data.height!);
+    persistTimer = null;
+  }, 200);
+});
+
+mainWindow.on("close", () => {
+  const { width, height } = mainWindow.getSize();
+  persistWindowSize(width, height);
 });
