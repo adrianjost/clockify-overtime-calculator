@@ -254,6 +254,7 @@ function renderCharts(data: OvertimeData) {
       "rgba(132, 150, 163, 0.45)",
       chartWidth,
       chartHeight,
+      shouldUseWeekly,
     );
     dailyContainer.appendChild(barSvg);
 
@@ -430,6 +431,7 @@ function createBarChart(
   color: string,
   width: number,
   height: number,
+  isWeeklyView: boolean,
 ): SVGSVGElement {
   const padding = { top: 20, right: 25, bottom: 15, left: 25 };
   const chartWidth = width - padding.left - padding.right;
@@ -440,10 +442,11 @@ function createBarChart(
   svg.setAttribute("height", String(height));
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
 
-  const rawMax = Math.max(...data, 1);
+  const referenceHours = isWeeklyView ? 40 : 8;
+  const rawMax = Math.max(...data, referenceHours, 1);
   // Coarser ticks on narrow widths or short heights
   const maxLeftTicks = width < 640 ? 5 : height < 250 ? 5 : 8;
-  // Step must be a divisor of 8 so both 0 and 8 always appear as ticks.
+  // Step must be a divisor of 8 so both 0 and the reference line value fit cleanly.
   const leftStep =
     ([2, 4, 8] as const).find((s) => Math.ceil(rawMax / s) <= maxLeftTicks) ??
     8;
@@ -463,7 +466,7 @@ function createBarChart(
   const cumulativeMax = Math.ceil(rawCumMax / rightStep) * rightStep;
   const cumulativeRange = cumulativeMax - cumulativeMin || 1;
 
-  // Left Y-axis integer labels — always includes 0 and 8.
+  // Left Y-axis integer labels — includes 0 and enough range for the reference line.
   for (let v = 0; v <= leftMax; v += leftStep) {
     const y = padding.top + chartHeight - (v / leftMax) * chartHeight;
     const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
@@ -520,18 +523,23 @@ function createBarChart(
     }
   });
 
-  // 8h reference line on left axis (label shown on Y axis tick).
-  const y8h = padding.top + chartHeight - (8 / leftMax) * chartHeight;
-  const line8h = document.createElementNS("http://www.w3.org/2000/svg", "line");
-  line8h.setAttribute("x1", String(padding.left));
-  line8h.setAttribute("y1", String(y8h));
-  line8h.setAttribute("x2", String(padding.left + chartWidth));
-  line8h.setAttribute("y2", String(y8h));
-  line8h.setAttribute("stroke", "#666");
-  line8h.setAttribute("stroke-width", "1.5");
-  line8h.setAttribute("stroke-dasharray", "4 4");
-  line8h.setAttribute("opacity", "0.75");
-  svg.appendChild(line8h);
+  // Working-hours reference line on left axis:
+  // daily view = 8h, weekly view = 40h.
+  const yReference =
+    padding.top + chartHeight - (referenceHours / leftMax) * chartHeight;
+  const referenceLine = document.createElementNS(
+    "http://www.w3.org/2000/svg",
+    "line",
+  );
+  referenceLine.setAttribute("x1", String(padding.left));
+  referenceLine.setAttribute("y1", String(yReference));
+  referenceLine.setAttribute("x2", String(padding.left + chartWidth));
+  referenceLine.setAttribute("y2", String(yReference));
+  referenceLine.setAttribute("stroke", "#666");
+  referenceLine.setAttribute("stroke-width", "1.5");
+  referenceLine.setAttribute("stroke-dasharray", "4 4");
+  referenceLine.setAttribute("opacity", "0.75");
+  svg.appendChild(referenceLine);
 
   // Draw cumulative overtime line (right Y axis scale)
   if (cumulativeData.length > 0) {
