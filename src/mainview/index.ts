@@ -37,7 +37,7 @@ const showSettings = () => {
 
 const showDashboard = () => {
   settingsContainer.style.display = "none";
-  dashboardContainer.style.display = "block";
+  dashboardContainer.style.removeProperty("display");
 };
 
 // Handle URL hash navigation
