@@ -55,10 +55,16 @@ window.addEventListener("hashchange", handleNavigation);
 try {
   // Initialize both views
   const { runAnalysis } = initializeDashboard(electrobun, showSettings);
-  initializeSettings(electrobun, () => {
-    showDashboard();
-    runAnalysis();
-  });
+  initializeSettings(
+    electrobun,
+    () => {
+      showDashboard();
+      runAnalysis();
+    },
+    () => {
+      history.back();
+    },
+  );
 
   // Check if we have API key
   const apiKey = localStorage.getItem("clockify_api_key");

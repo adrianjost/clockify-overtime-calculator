@@ -3,6 +3,7 @@ import type { Electroview } from "electrobun/view";
 export function initializeSettings(
   electrobun: Electroview<any>,
   onSettingsSaved: () => void,
+  onCancel?: () => void,
 ) {
   const form = document.querySelector<HTMLFormElement>("#settings-form");
   const apiKeyInput = document.querySelector<HTMLInputElement>("#api-key");
@@ -18,12 +19,22 @@ export function initializeSettings(
     apiKeyInput.value = savedApiKey;
   }
 
-  // Hide reset button during initial onboarding (no API key yet)
+  // Hide reset button and cancel during initial onboarding (no API key yet)
   const dangerZone = document.querySelector<HTMLElement>(
     ".settings-danger-zone",
   );
   if (dangerZone) {
     dangerZone.style.display = savedApiKey ? "" : "none";
+  }
+
+  const closeBtn = document.querySelector<HTMLButtonElement>("#close-settings-btn");
+  if (closeBtn) {
+    if (savedApiKey) {
+      closeBtn.hidden = false;
+    }
+    closeBtn.addEventListener("click", () => {
+      onCancel?.();
+    });
   }
 
   form.addEventListener("submit", (event) => {

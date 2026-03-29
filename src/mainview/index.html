@@ -10,7 +10,10 @@
     <div class="app">
       <!-- Settings View -->
       <div id="settings-container" class="settings-view">
-        <h1>Settings</h1>
+        <div class="settings-header">
+          <h1>Settings</h1>
+          <button type="button" id="close-settings-btn" class="btn-icon" aria-label="Close settings" title="Close" hidden>&#x2715;</button>
+        </div>
         <form id="settings-form" class="settings-form">
           <div class="form-group">
             <label for="api-key">Clockify API Key</label>
