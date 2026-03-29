@@ -153,7 +153,6 @@ function renderCharts(data: OvertimeData, cumulativeMode: CumulativeMode) {
       if (isFirstEntry || isNewMonth) {
         return current.toLocaleDateString("en-US", {
           month: "short",
-          day: "numeric",
         });
       }
       return "";
