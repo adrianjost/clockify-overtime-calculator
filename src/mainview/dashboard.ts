@@ -3,6 +3,11 @@ import type { OvertimeData } from "../bun/report.ts";
 
 type CumulativeMode = "daily" | "weekly";
 
+// Zoom/pan state — indices into lastFilledData. null = full range.
+let focusRange: { start: number; end: number } | null = null;
+// Cached full dataset so interaction handlers can compute zoomed slices.
+let lastFilledData: OvertimeData["dailyData"] = [];
+
 export function initializeDashboard(
   electrobun: Electroview<any>,
   onNavigateToSettings: () => void,
@@ -67,6 +72,7 @@ export function initializeDashboard(
 
   yearSelect.addEventListener("change", () => {
     localStorage.setItem("clockify_viewed_year", yearSelect.value);
+    focusRange = null; // Reset zoom when changing year
     runAnalysis();
   });
 
@@ -121,6 +127,23 @@ export function initializeDashboard(
   function setLoading(loading: boolean) {
     if (fetchSpinner) fetchSpinner.hidden = !loading;
   }
+
+  // Register chart zoom/pan interaction once (persists across re-renders).
+  const chartContainer = document.querySelector<HTMLDivElement>("#daily-chart");
+  if (chartContainer) {
+    setupChartInteraction(chartContainer);
+  }
+
+  // chart-interaction: wheel/drag changed focusRange, re-render.
+  document.addEventListener("chart-interaction", () => {
+    if (lastData) renderDashboard(lastData, overtimeValue, content);
+  });
+
+  // zoom-reset: reset button or dblclick, back to full range.
+  document.addEventListener("zoom-reset", () => {
+    focusRange = null;
+    if (lastData) renderDashboard(lastData, overtimeValue, content);
+  });
 }
 
 function renderDashboard(
@@ -166,29 +189,58 @@ function renderCharts(data: OvertimeData) {
 
     // Fill missing calendar days with zero-hour entries.
     const filledDailyData = fillMissingDays(data.dailyData);
+    lastFilledData = filledDailyData;
 
-    // Prepare data
-    const dailyDates = filledDailyData.map((d) => d.date);
-    const actualHours = filledDailyData.map((d) => d.actualHours);
+    // Apply focus range (zoom/pan). Full year when null.
+    const totalLen = filledDailyData.length;
+    const effective = focusRange
+      ? {
+          start: Math.max(0, focusRange.start),
+          end: Math.min(totalLen - 1, focusRange.end),
+        }
+      : { start: 0, end: totalLen - 1 };
+    const visibleData = filledDailyData.slice(
+      effective.start,
+      effective.end + 1,
+    );
 
-    // Create display labels (only on month changes)
+    // Prepare data from visible slice
+    const dailyDates = visibleData.map((d) => d.date);
+    const actualHours = visibleData.map((d) => d.actualHours);
+
+    // Create display labels — density adapts to how many days are visible.
+    // ≤60 days visible: show "Mar 5"-style labels on every week start + month changes.
+    // >60 days visible: only show month names on month changes (original behaviour).
+    const visibleCount = visibleData.length;
+    const showDayLabels = visibleCount <= 60;
+
     const displayLabels = dailyDates.map((date, index) => {
       const current = new Date(date);
+      const isFirstEntry = index === 0;
       let previousMonth = -1;
-
       if (index > 0) {
-        const previous = new Date(dailyDates[index - 1]);
-        previousMonth = previous.getMonth();
+        previousMonth = new Date(dailyDates[index - 1]).getMonth();
+      }
+      const isNewMonth = current.getMonth() !== previousMonth;
+
+      if (showDayLabels) {
+        // Show a label on Mondays (start of week) and on month changes.
+        const isMonday = current.getDay() === 1;
+        if (isFirstEntry || isNewMonth || isMonday) {
+          if (isNewMonth || isFirstEntry) {
+            return current.toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+            });
+          }
+          return current.toLocaleDateString("en-US", { day: "numeric" });
+        }
+        return "";
       }
 
-      const currentMonth = current.getMonth();
-      const isNewMonth = currentMonth !== previousMonth;
-      const isFirstEntry = index === 0;
-
+      // Default: month name only on month changes
       if (isFirstEntry || isNewMonth) {
-        return current.toLocaleDateString("en-US", {
-          month: "short",
-        });
+        return current.toLocaleDateString("en-US", { month: "short" });
       }
       return "";
     });
@@ -214,16 +266,15 @@ function renderCharts(data: OvertimeData) {
       chartHeight = Math.min(400, availableHeight);
     }
 
-    // Determine if we should use weekly density instead of daily
-    // Use weekly if bars would be less than 8px wide (more fine-grained control)
-    const shouldUseWeekly = chartWidth / filledDailyData.length < 8;
+    // Determine density mode based on visible bar count
+    const shouldUseWeekly = chartWidth / visibleData.length < 8;
 
-    // Build cumulative series based on the view mode (daily or weekly)
+    // Build cumulative on full data for correct running totals, then slice
     const cumulativeMode: CumulativeMode = shouldUseWeekly ? "weekly" : "daily";
     const cumulativeHours = buildCumulativeSeries(
       filledDailyData,
       cumulativeMode,
-    );
+    ).slice(effective.start, effective.end + 1);
 
     let dataToUse = actualHours;
     let cumulativeToUse = cumulativeHours;
@@ -232,7 +283,7 @@ function renderCharts(data: OvertimeData) {
     let weeklyReferenceHoursToUse: number[] | undefined;
 
     if (shouldUseWeekly) {
-      const weeklyData = aggregateToWeekly(filledDailyData, cumulativeHours);
+      const weeklyData = aggregateToWeekly(visibleData, cumulativeHours);
       dataToUse = weeklyData.hours;
       cumulativeToUse = weeklyData.cumulative;
       labelsToUse = weeklyData.labels;
@@ -240,13 +291,42 @@ function renderCharts(data: OvertimeData) {
       weeklyReferenceHoursToUse = weeklyData.referenceHours;
     }
 
-    // Update chart title based on view mode
+    // Update chart title; show date range + reset button when zoomed
     const h2Title = dailyContainer.parentElement?.querySelector("h2");
     if (h2Title) {
-      h2Title.textContent = shouldUseWeekly
+      const titleText = shouldUseWeekly
         ? "Weekly Working Hours"
         : "Daily Working Hours";
+      h2Title.innerHTML = "";
+      const textSpan = document.createElement("span");
+      textSpan.textContent = titleText;
+      h2Title.appendChild(textSpan);
+
+      if (focusRange !== null) {
+        const startDate = new Date(visibleData[0].date);
+        const endDate = new Date(visibleData[visibleData.length - 1].date);
+        const fmt = (d: Date) =>
+          d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        const rangeSpan = document.createElement("span");
+        rangeSpan.className = "chart-range-label";
+        rangeSpan.textContent = ` · ${fmt(startDate)}–${fmt(endDate)}`;
+        h2Title.appendChild(rangeSpan);
+
+        const resetBtn = document.createElement("button");
+        resetBtn.className = "zoom-reset-btn";
+        resetBtn.textContent = "×";
+        resetBtn.title = "Reset zoom";
+        resetBtn.addEventListener("click", () => {
+          dailyContainer!.dispatchEvent(
+            new CustomEvent("zoom-reset", { bubbles: true }),
+          );
+        });
+        h2Title.appendChild(resetBtn);
+      }
     }
+
+    // Show grab cursor when zoomed (draggable)
+    dailyContainer.style.cursor = focusRange !== null ? "grab" : "";
 
     const barSvg = createBarChart(
       dataToUse,
@@ -323,7 +403,9 @@ function aggregateToWeekly(
     dates.push(weekData.startDate);
 
     // Weekly reference: 8h for each day with recorded work in this week.
-    const workedDays = indices.filter((i) => filledDailyData[i].actualHours > 0).length;
+    const workedDays = indices.filter(
+      (i) => filledDailyData[i].actualHours > 0,
+    ).length;
     referenceHours.push(workedDays * 8);
 
     // Cumulative is taken from the provided cumulative array (respects mode: daily/weekly)
@@ -422,6 +504,135 @@ function buildCumulativeSeries(
   }
 
   return result;
+}
+
+function setupChartInteraction(container: HTMLDivElement): void {
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartRange: { start: number; end: number } | null = null;
+  let interactionRafId: number | null = null;
+  // Accumulated fractional zoom, normalised against macOS high-resolution trackpad
+  let zoomAccumulator = 0;
+
+  function dispatchRerender() {
+    container.dispatchEvent(
+      new CustomEvent("chart-interaction", { bubbles: true }),
+    );
+  }
+
+  // Scroll to zoom in/out, centered on the mouse position
+  container.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      const len = lastFilledData.length;
+      if (!len) return;
+
+      const current = focusRange ?? { start: 0, end: len - 1 };
+      const visibleCount = current.end - current.start + 1;
+
+      const rect = container.getBoundingClientRect();
+      const relX = Math.max(
+        0,
+        Math.min(1, (e.clientX - rect.left) / rect.width),
+      );
+
+      // macOS trackpad sends many small deltaY events; normalise to avoid
+      // over-sensitivity. Clamp per-event contribution to ±30 units.
+      const rawDelta =
+        e.deltaMode === 0 // DOM_DELTA_PIXEL (trackpad)
+          ? Math.max(-30, Math.min(30, e.deltaY))
+          : e.deltaY * 20; // DOM_DELTA_LINE (mouse wheel)
+
+      zoomAccumulator += rawDelta;
+
+      // Only commit a zoom step every 60 accumulated units
+      const STEP_THRESHOLD = 60;
+      if (Math.abs(zoomAccumulator) < STEP_THRESHOLD) return;
+
+      const steps = Math.trunc(zoomAccumulator / STEP_THRESHOLD);
+      zoomAccumulator -= steps * STEP_THRESHOLD;
+
+      // Each step shrinks/grows the visible range by ~20%
+      const factor = steps > 0 ? Math.pow(0.8, steps) : Math.pow(1.25, -steps);
+      const newCount = Math.round(
+        Math.max(14, Math.min(len, visibleCount * factor)),
+      );
+
+      if (newCount >= len) {
+        focusRange = null;
+      } else {
+        const pivot = current.start + relX * visibleCount;
+        let newStart = Math.round(pivot - relX * newCount);
+        let newEnd = newStart + newCount - 1;
+        if (newStart < 0) {
+          newEnd -= newStart;
+          newStart = 0;
+        }
+        if (newEnd >= len) {
+          newStart -= newEnd - len + 1;
+          newEnd = len - 1;
+        }
+        newStart = Math.max(0, newStart);
+        focusRange = { start: newStart, end: newEnd };
+      }
+      dispatchRerender();
+    },
+    { passive: false },
+  );
+
+  // Drag to pan when zoomed in
+  container.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || !focusRange) return;
+    isDragging = true;
+    dragStartX = e.clientX;
+    dragStartRange = { ...focusRange };
+    container.setPointerCapture(e.pointerId);
+    container.style.cursor = "grabbing";
+  });
+
+  container.addEventListener("pointermove", (e) => {
+    if (!isDragging || !dragStartRange) return;
+    const len = lastFilledData.length;
+    const rect = container.getBoundingClientRect();
+    const visibleCount = dragStartRange.end - dragStartRange.start + 1;
+    const pixelsPerBar = rect.width / visibleCount;
+    const deltaBars = Math.round(-(e.clientX - dragStartX) / pixelsPerBar);
+
+    let newStart = dragStartRange.start + deltaBars;
+    let newEnd = dragStartRange.end + deltaBars;
+    if (newStart < 0) {
+      newEnd -= newStart;
+      newStart = 0;
+    }
+    if (newEnd >= len) {
+      newStart -= newEnd - len + 1;
+      newEnd = len - 1;
+    }
+    newStart = Math.max(0, newStart);
+    focusRange = { start: newStart, end: newStart + visibleCount - 1 };
+
+    if (interactionRafId !== null) cancelAnimationFrame(interactionRafId);
+    interactionRafId = requestAnimationFrame(() => {
+      interactionRafId = null;
+      dispatchRerender();
+    });
+  });
+
+  const endDrag = (_e: PointerEvent) => {
+    if (!isDragging) return;
+    isDragging = false;
+    dragStartRange = null;
+    container.style.cursor = focusRange !== null ? "grab" : "";
+  };
+  container.addEventListener("pointerup", endDrag);
+  container.addEventListener("pointercancel", endDrag);
+
+  // Double-click to reset to full range
+  container.addEventListener("dblclick", () => {
+    focusRange = null;
+    container.dispatchEvent(new CustomEvent("zoom-reset", { bubbles: true }));
+  });
 }
 
 function getWeekKey(isoDate: string): string {

@@ -118,6 +118,7 @@ const mainWindow = new BrowserWindow({
   title: "Clockify Overtime",
   url: "views://mainview/index.html",
   rpc,
+  renderer: "cef",
   frame: {
     width: windowSize.width,
     height: windowSize.height,

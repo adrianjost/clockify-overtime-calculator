@@ -341,6 +341,33 @@ body {
   margin-bottom: 8px;
   color: var(--text);
   margin-top: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+}
+
+.chart-range-label {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.zoom-reset-btn {
+  margin-left: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  padding: 0 2px;
+  line-height: 1;
+  opacity: 0.6;
+  transition: opacity 120ms;
+}
+
+.zoom-reset-btn:hover {
+  opacity: 1;
+  color: var(--text);
 }
 
 canvas {
