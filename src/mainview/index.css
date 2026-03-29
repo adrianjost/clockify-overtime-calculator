@@ -100,6 +100,26 @@ body {
   align-items: center;
 }
 
+.form-group--inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.form-group--inline label {
+  font-weight: 600;
+  margin: 0;
+}
+
+.form-group--inline input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
 /* Dashboard View */
 .dashboard-view {
   display: flex;

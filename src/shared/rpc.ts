@@ -15,6 +15,18 @@ export type AppRPC = {
         params: {};
         response: void;
       };
+      setLaunchAtLogin: {
+        params: { enabled: boolean };
+        response: void;
+      };
+      setTrayEnabled: {
+        params: { enabled: boolean };
+        response: void;
+      };
+      getTrayEnabled: {
+        params: {};
+        response: { enabled: boolean };
+      };
     };
     messages: {};
   }>;

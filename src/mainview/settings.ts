@@ -19,7 +19,7 @@ export function initializeSettings(
     apiKeyInput.value = savedApiKey;
   }
 
-  // Hide reset button and cancel during initial onboarding (no API key yet)
+  // Hide reset button, close button, and launch-at-login during initial onboarding
   const dangerZone = document.querySelector<HTMLElement>(
     ".settings-danger-zone",
   );
@@ -27,13 +27,79 @@ export function initializeSettings(
     dangerZone.style.display = savedApiKey ? "" : "none";
   }
 
-  const closeBtn = document.querySelector<HTMLButtonElement>("#close-settings-btn");
+  const closeBtn = document.querySelector<HTMLButtonElement>(
+    "#close-settings-btn",
+  );
   if (closeBtn) {
     if (savedApiKey) {
       closeBtn.hidden = false;
     }
     closeBtn.addEventListener("click", () => {
       onCancel?.();
+    });
+  }
+
+  // Tray visibility toggle — only shown when API key already exists
+  const trayEnabledGroup = document.querySelector<HTMLElement>(
+    "#tray-enabled-group",
+  );
+  const trayEnabledCheckbox =
+    document.querySelector<HTMLInputElement>("#tray-enabled");
+  if (trayEnabledGroup && trayEnabledCheckbox) {
+    if (savedApiKey) {
+      trayEnabledGroup.hidden = false;
+      trayEnabledCheckbox.checked =
+        localStorage.getItem("tray_enabled") !== "false";
+      (async () => {
+        try {
+          const state = await (electrobun as any).rpc.request.getTrayEnabled(
+            {},
+          );
+          const enabled = Boolean(state?.enabled);
+          trayEnabledCheckbox.checked = enabled;
+          localStorage.setItem("tray_enabled", String(enabled));
+        } catch (err) {
+          console.error("getTrayEnabled failed:", err);
+        }
+      })();
+    }
+
+    trayEnabledCheckbox.addEventListener("change", async () => {
+      const enabled = trayEnabledCheckbox.checked;
+      localStorage.setItem("tray_enabled", String(enabled));
+      try {
+        await (electrobun as any).rpc.request.setTrayEnabled({ enabled });
+      } catch (err) {
+        console.error("setTrayEnabled failed:", err);
+        trayEnabledCheckbox.checked = !enabled;
+        localStorage.setItem("tray_enabled", String(!enabled));
+      }
+    });
+  }
+
+  // Launch at login toggle — only shown when API key already exists
+  const launchAtLoginGroup = document.querySelector<HTMLElement>(
+    "#launch-at-login-group",
+  );
+  const launchAtLoginCheckbox =
+    document.querySelector<HTMLInputElement>("#launch-at-login");
+  if (launchAtLoginGroup && launchAtLoginCheckbox) {
+    if (savedApiKey) {
+      launchAtLoginGroup.hidden = false;
+      launchAtLoginCheckbox.checked =
+        localStorage.getItem("launch_at_login") === "true";
+    }
+    launchAtLoginCheckbox.addEventListener("change", async () => {
+      const enabled = launchAtLoginCheckbox.checked;
+      localStorage.setItem("launch_at_login", String(enabled));
+      try {
+        await (electrobun as any).rpc.request.setLaunchAtLogin({ enabled });
+      } catch (err) {
+        console.error("setLaunchAtLogin failed:", err);
+        // Revert checkbox on failure
+        launchAtLoginCheckbox.checked = !enabled;
+        localStorage.setItem("launch_at_login", String(!enabled));
+      }
     });
   }
 
