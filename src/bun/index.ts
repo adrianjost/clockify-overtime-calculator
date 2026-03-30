@@ -198,7 +198,12 @@ function clearStoredApiKeyFromKeychain(): void {
 }
 
 function loadStoredApiKey(): string | null {
-  return loadStoredApiKeyFromKeychain();
+  try {
+    return loadStoredApiKeyFromKeychain();
+  } catch {
+    console.error("Failed to load API key from Keychain");
+    return null;
+  }
 }
 
 function persistStoredApiKey(apiKey: string): void {
@@ -213,8 +218,8 @@ function persistStoredApiKey(apiKey: string): void {
 function clearStoredApiKey(): void {
   try {
     clearStoredApiKeyFromKeychain();
-  } catch {
-    // Best effort cleanup.
+  } catch (err) {
+    console.error("Failed to clear API key from Keychain:", err);
   }
 }
 
