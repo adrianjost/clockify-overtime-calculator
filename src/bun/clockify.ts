@@ -34,13 +34,10 @@ const getHeaders = (apiKey: string): Record<string, string> => ({
  * @throws Error if the API request fails
  */
 export const fetchActiveUser = async (apiKey: string): Promise<ActiveUser> => {
-  const response = await fetchWithRetry(
-    `${CLOCKIFY_API_BASE}/user`,
-    {
-      method: "GET",
-      headers: getHeaders(apiKey),
-    },
-  );
+  const response = await fetchWithRetry(`${CLOCKIFY_API_BASE}/user`, {
+    method: "GET",
+    headers: getHeaders(apiKey),
+  });
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Failed to fetch active user: ${errorText}`);

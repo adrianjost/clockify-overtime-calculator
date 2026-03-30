@@ -50,9 +50,8 @@ export function buildOvertimeData(
         expectedHours = WORKDAY_HOURS;
       }
       actualWorkDuration = actualWorkDuration.add(workDuration);
-      const cumulativeOvertime = actualWorkDuration.subtract(
-        expectedWorkDuration,
-      );
+      const cumulativeOvertime =
+        actualWorkDuration.subtract(expectedWorkDuration);
       dailyData.push({
         date: day.toString(),
         actualHours: workDuration.hours + workDuration.minutes / 60,

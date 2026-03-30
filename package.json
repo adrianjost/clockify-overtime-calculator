@@ -5,6 +5,7 @@
   "scripts": {
     "start": "electrobun dev",
     "dev": "electrobun dev --watch",
+    "format": "oxfmt --write",
     "generate-icons": "bun scripts/generate-icons.ts"
   },
   "dependencies": {
@@ -12,6 +13,7 @@
     "temporal-polyfill": "^0.2.5"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "oxfmt": "^0.42.0"
   }
 }

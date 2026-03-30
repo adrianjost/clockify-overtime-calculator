@@ -47,9 +47,8 @@ export function initializeDashboard(
 
   async function updateInterpolatedValue() {
     try {
-      const interpolatedData = await electrobun.rpc.request.getInterpolatedOvertimeData(
-        {},
-      );
+      const interpolatedData =
+        await electrobun.rpc.request.getInterpolatedOvertimeData({});
       if (interpolatedData) {
         updateOvertimeDisplay(interpolatedData, overtimeValue);
       }
