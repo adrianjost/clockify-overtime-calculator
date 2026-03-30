@@ -273,6 +273,63 @@ function formatTrayTitle(data: OvertimeData): string {
   return m > 0 ? `${sign}${h}h ${m}m` : `${sign}${h}h`;
 }
 
+function interpolateOvertimeValue(
+  oldData: OvertimeData,
+  newData: OvertimeData,
+  elapsedMs: number,
+  totalDurationMs: number,
+): OvertimeData {
+  // Linear interpolation between old and new values based on elapsed time
+  const progress = Math.min(1, Math.max(0, elapsedMs / totalDurationMs));
+
+  const oldTotalMinutes =
+    oldData.totalOvertimeHours * 60 + oldData.totalOvertimeMinutes;
+  const newTotalMinutes =
+    newData.totalOvertimeHours * 60 + newData.totalOvertimeMinutes;
+  const interpolatedTotalMinutes =
+    oldTotalMinutes + (newTotalMinutes - oldTotalMinutes) * progress;
+
+  // Convert back to hours and minutes
+  const sign = interpolatedTotalMinutes >= 0 ? 1 : -1;
+  const absMinutes = Math.abs(interpolatedTotalMinutes);
+  const interpolatedHours = sign * Math.floor(absMinutes / 60);
+  // Use floor for minutes to avoid rounding jumps, ensuring smooth progression
+  const interpolatedMinutes = Math.floor(absMinutes % 60);
+
+  return {
+    ...newData,
+    totalOvertimeHours: interpolatedHours,
+    totalOvertimeMinutes: interpolatedMinutes,
+  };
+}
+
+function getCurrentInterpolatedOvertimeData(): OvertimeData | null {
+  if (!currentOvertimeData) {
+    return null;
+  }
+
+  // If we don't have old data yet, just return current data
+  if (!lastFetchedOvertimeData) {
+    return currentOvertimeData;
+  }
+
+  const elapsedMs = Date.now() - lastFetchTime;
+  const FETCH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+  // If time since fetch exceeds interval, return current data (new fetch should have happened)
+  if (elapsedMs >= FETCH_INTERVAL_MS) {
+    return currentOvertimeData;
+  }
+
+  // Interpolate between old and current data
+  return interpolateOvertimeValue(
+    lastFetchedOvertimeData,
+    currentOvertimeData,
+    elapsedMs,
+    FETCH_INTERVAL_MS,
+  );
+}
+
 // ─── State ────────────────────────────────────────────────────────────────────
 
 let mainWindowId: number | null = null;
@@ -282,6 +339,17 @@ const preferences = loadPreferences();
 let trayEnabled = preferences.trayEnabled;
 let trayTitle = "--";
 let tray: Tray | null = null;
+
+// Interpolation state for smooth value transitions
+let lastFetchTime: number = 0;
+let lastFetchedOvertimeData: OvertimeData | null = null;
+let currentOvertimeData: OvertimeData | null = null;
+let trayUpdateInterval: ReturnType<typeof setInterval> | null = null;
+let trayDisplayInterval: ReturnType<typeof setInterval> | null = null;
+
+// Calculate current API key and year for background updates
+let currentApiKey: string | null = null;
+let currentYear: number = new Date().getFullYear();
 
 function setDockVisible(visible: boolean) {
   try {
@@ -373,9 +441,15 @@ function setTrayEnabled(enabled: boolean) {
 
   if (trayEnabled) {
     createTray();
-  } else if (tray) {
-    tray.remove();
-    tray = null;
+    if (currentApiKey) {
+      startTrayUpdateIntervals();
+    }
+  } else {
+    stopTrayUpdateIntervals();
+    if (tray) {
+      tray.remove();
+      tray = null;
+    }
   }
 }
 
@@ -402,6 +476,11 @@ async function analyzeAndUpdateTray(
   );
   const overtimeData = buildOvertimeData(year, dataOfYear);
 
+  // Track for interpolation
+  lastFetchedOvertimeData = currentOvertimeData;
+  currentOvertimeData = overtimeData;
+  lastFetchTime = Date.now();
+
   trayTitle = formatTrayTitle(overtimeData);
   if (tray) {
     tray.setTitle(trayTitle);
@@ -417,8 +496,55 @@ async function refreshTrayDataOnLaunch(): Promise<void> {
   const year = new Date().getFullYear();
   try {
     await analyzeAndUpdateTray(apiKey, year);
+    currentApiKey = apiKey;
+    currentYear = year;
+    startTrayUpdateIntervals();
   } catch (err) {
     console.error("Launch-time tray refresh failed:", err);
+  }
+}
+
+function startTrayUpdateIntervals(): void {
+  if (!trayEnabled || !currentApiKey) return;
+
+  // Clear existing intervals if any
+  if (trayUpdateInterval) clearInterval(trayUpdateInterval);
+  if (trayDisplayInterval) clearInterval(trayDisplayInterval);
+
+  // Update tray data every 5 minutes
+  const FETCH_INTERVAL_MS = 5 * 60 * 1000;
+  trayUpdateInterval = setInterval(async () => {
+    if (!currentApiKey || !trayEnabled) return;
+    try {
+      await analyzeAndUpdateTray(currentApiKey, currentYear);
+    } catch (err) {
+      console.error("Background tray update failed:", err);
+    }
+  }, FETCH_INTERVAL_MS);
+
+  // Update tray display (with interpolation) every second
+  trayDisplayInterval = setInterval(() => {
+    if (!tray || !trayEnabled) return;
+    const interpolatedData = getCurrentInterpolatedOvertimeData();
+    if (interpolatedData) {
+      const newTitle = formatTrayTitle(interpolatedData);
+      // Always update the tray to ensure smooth interpolation animation
+      if (newTitle !== trayTitle) {
+        trayTitle = newTitle;
+        tray.setTitle(trayTitle);
+      }
+    }
+  }, 1000);
+}
+
+function stopTrayUpdateIntervals(): void {
+  if (trayUpdateInterval) {
+    clearInterval(trayUpdateInterval);
+    trayUpdateInterval = null;
+  }
+  if (trayDisplayInterval) {
+    clearInterval(trayDisplayInterval);
+    trayDisplayInterval = null;
   }
 }
 
@@ -439,7 +565,25 @@ const rpc = BrowserView.defineRPC<AppRPC>({
         apiKey: string;
         year: number;
       }) => {
-        return analyzeAndUpdateTray(apiKey, year);
+        const data = await analyzeAndUpdateTray(apiKey, year);
+        currentApiKey = apiKey;
+        currentYear = year;
+        // Start background update intervals when user successfully analyzes
+        if (trayEnabled) {
+          startTrayUpdateIntervals();
+        }
+        return data;
+      },
+      getInterpolatedOvertimeData: async () => {
+        return (
+          getCurrentInterpolatedOvertimeData() ||
+          currentOvertimeData || {
+            year: currentYear,
+            totalOvertimeHours: 0,
+            totalOvertimeMinutes: 0,
+            dailyData: [],
+          }
+        );
       },
       setLaunchAtLogin: async ({ enabled }: { enabled: boolean }) => {
         if (enabled) {

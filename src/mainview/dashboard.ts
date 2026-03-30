@@ -33,12 +33,41 @@ export function initializeDashboard(
   // Polling state — declared before runAnalysis so the closure can reference them
   const POLL_INTERVAL_MS = 5 * 60 * 1000;
   const MIN_REFETCH_ON_VISIBILITY_MS = 60 * 1000;
+  const INTERPOLATION_UPDATE_MS = 1000; // Update display every 500ms for smooth animation
   let lastFetchTime = 0;
   let pollTimer: ReturnType<typeof setInterval> | null = null;
+  let interpolationTimer: ReturnType<typeof setInterval> | null = null;
 
   async function getStoredApiKey(): Promise<string> {
     const state = await (electrobun as any).rpc.request.getStoredApiKey({});
     return (state?.apiKey ?? "").trim();
+  }
+
+  async function updateInterpolatedValue() {
+    try {
+      const interpolatedData = await (
+        electrobun as any
+      ).rpc.request.getInterpolatedOvertimeData({});
+      if (interpolatedData) {
+        updateOvertimeDisplay(interpolatedData, overtimeValue);
+      }
+    } catch {
+      // Silently fail if unable to get interpolated value
+    }
+  }
+
+  function startInterpolationUpdates() {
+    if (interpolationTimer !== null) return;
+    interpolationTimer = setInterval(
+      updateInterpolatedValue,
+      INTERPOLATION_UPDATE_MS,
+    );
+  }
+
+  function stopInterpolationUpdates() {
+    if (interpolationTimer === null) return;
+    clearInterval(interpolationTimer);
+    interpolationTimer = null;
   }
 
   async function runAnalysis() {
@@ -107,13 +136,16 @@ export function initializeDashboard(
         fetchIfApiKeyPresent();
       }
       startPolling();
+      startInterpolationUpdates();
     } else {
       stopPolling();
+      stopInterpolationUpdates();
     }
   });
 
   if (document.visibilityState === "visible") {
     startPolling();
+    startInterpolationUpdates();
   }
 
   window.addEventListener("resize", () => {
@@ -160,6 +192,21 @@ function renderDashboard(
 ) {
   if (!overtimeValue || !content) return;
 
+  updateOvertimeDisplay(data, overtimeValue);
+
+  // Show content
+  content.style.display = "block";
+
+  // Render charts
+  renderCharts(data);
+}
+
+function updateOvertimeDisplay(
+  data: OvertimeData,
+  overtimeValue: HTMLDivElement | null,
+) {
+  if (!overtimeValue) return;
+
   // Update overtime value
   const sign = data.totalOvertimeHours >= 0 ? "+" : "";
   overtimeValue.textContent = `${sign}${data.totalOvertimeHours}h ${data.totalOvertimeMinutes}min`;
@@ -168,12 +215,6 @@ function renderDashboard(
   } else {
     overtimeValue.style.color = "#0e7c66";
   }
-
-  // Show content
-  content.style.display = "block";
-
-  // Render charts
-  renderCharts(data);
 }
 
 function renderCharts(data: OvertimeData) {

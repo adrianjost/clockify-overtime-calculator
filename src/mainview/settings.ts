@@ -34,7 +34,8 @@ export function initializeSettings(
   const trayEnabledCheckbox =
     document.querySelector<HTMLInputElement>("#tray-enabled");
   if (trayEnabledCheckbox) {
-    trayEnabledCheckbox.checked = localStorage.getItem("tray_enabled") !== "false";
+    trayEnabledCheckbox.checked =
+      localStorage.getItem("tray_enabled") !== "false";
 
     trayEnabledCheckbox.addEventListener("change", async () => {
       const enabled = trayEnabledCheckbox.checked;
@@ -56,7 +57,8 @@ export function initializeSettings(
   const launchAtLoginCheckbox =
     document.querySelector<HTMLInputElement>("#launch-at-login");
   if (launchAtLoginCheckbox) {
-    launchAtLoginCheckbox.checked = localStorage.getItem("launch_at_login") === "true";
+    launchAtLoginCheckbox.checked =
+      localStorage.getItem("launch_at_login") === "true";
     launchAtLoginCheckbox.addEventListener("change", async () => {
       const enabled = launchAtLoginCheckbox.checked;
       localStorage.setItem("launch_at_login", String(enabled));
@@ -97,7 +99,9 @@ export function initializeSettings(
         apiKeyInput.value = secureApiKey;
         hasStoredApiKey = true;
         if (trayEnabledCheckbox) {
-          const trayState = await (electrobun as any).rpc.request.getTrayEnabled({});
+          const trayState = await (
+            electrobun as any
+          ).rpc.request.getTrayEnabled({});
           const enabled = Boolean(trayState?.enabled);
           trayEnabledCheckbox.checked = enabled;
           localStorage.setItem("tray_enabled", String(enabled));

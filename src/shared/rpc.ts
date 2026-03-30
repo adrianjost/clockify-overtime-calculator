@@ -11,6 +11,10 @@ export type AppRPC = {
         };
         response: OvertimeData;
       };
+      getInterpolatedOvertimeData: {
+        params: {};
+        response: OvertimeData;
+      };
       closeApp: {
         params: {};
         response: void;
