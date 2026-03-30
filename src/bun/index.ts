@@ -274,6 +274,12 @@ async function disableLaunchAtLogin(): Promise<void> {
 
 // ─── Tray helpers ─────────────────────────────────────────────────────────────
 
+const TRAY_MENU_ITEMS = [
+  { type: "normal", label: "Open Clockify Overtime", action: "open" },
+  { type: "separator" },
+  { type: "normal", label: "Quit", action: "quit" },
+] as const;
+
 function formatTrayTitle(data: OvertimeData): string {
   const totalMinutes = data.totalOvertimeHours * 60 + data.totalOvertimeMinutes;
   const sign = totalMinutes >= 0 ? "+" : "-";
@@ -390,11 +396,7 @@ function isRightMouseButtonDown(): boolean {
 }
 
 function showTrayContextMenu() {
-  ContextMenu.showContextMenu([
-    { type: "normal", label: "Open Clockify Overtime", action: "open" },
-    { type: "separator" },
-    { type: "normal", label: "Quit", action: "quit" },
-  ]);
+  ContextMenu.showContextMenu([...TRAY_MENU_ITEMS]);
 }
 
 ContextMenu.on("context-menu-clicked", (event: unknown) => {
@@ -412,11 +414,7 @@ function createTray() {
   if (tray) return;
 
   tray = new Tray({ title: trayTitle });
-  tray.setMenu([
-    { type: "normal", label: "Open Clockify Overtime", action: "open" },
-    { type: "separator" },
-    { type: "normal", label: "Quit", action: "quit" },
-  ]);
+  tray.setMenu([...TRAY_MENU_ITEMS]);
 
   tray.on("tray-clicked", (event: unknown) => {
     const action =
