@@ -3,6 +3,8 @@ import type { AppRPC } from "../shared/rpc.ts";
 import { initializeSettings } from "./settings.ts";
 import { initializeDashboard } from "./dashboard.ts";
 
+type ElectrobunClient = Electroview<AppRPC>;
+
 // Define the Electroview RPC schema (renderer-side handlers, which are empty for now)
 const rpc = Electroview.defineRPC<AppRPC>({
   handlers: {
@@ -12,9 +14,7 @@ const rpc = Electroview.defineRPC<AppRPC>({
 });
 
 // Create Electroview instance with the RPC definition
-const electrobun = new Electroview({ rpc });
-
-console.log("Electroview initialized with RPC:", electrobun);
+const electrobun: ElectrobunClient = new Electroview({ rpc });
 
 const settingsContainer = document.querySelector(
   "#settings-container",
@@ -69,7 +69,7 @@ try {
   // Check if we have API key in secure storage
   void (async () => {
     try {
-      const state = await (electrobun as any).rpc.request.getStoredApiKey({});
+      const state = await electrobun.rpc.request.getStoredApiKey({});
       const apiKey = (state?.apiKey ?? "").trim();
       if (!apiKey) {
         showSettings();
