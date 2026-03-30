@@ -1,7 +1,9 @@
 import type { Electroview } from "electrobun/view";
 import type { OvertimeData } from "../bun/report.ts";
+import type { AppRPC } from "../shared/rpc.ts";
 
 type CumulativeMode = "daily" | "weekly";
+type ElectrobunClient = Electroview<AppRPC>;
 
 // Zoom/pan state — indices into lastFilledData. null = full range.
 let focusRange: { start: number; end: number } | null = null;
@@ -9,7 +11,7 @@ let focusRange: { start: number; end: number } | null = null;
 let lastFilledData: OvertimeData["dailyData"] = [];
 
 export function initializeDashboard(
-  electrobun: Electroview<any>,
+  electrobun: ElectrobunClient,
   onNavigateToSettings: () => void,
 ) {
   const yearSelect = document.querySelector<HTMLInputElement>("#year-select");
@@ -39,15 +41,15 @@ export function initializeDashboard(
   let interpolationTimer: ReturnType<typeof setInterval> | null = null;
 
   async function getStoredApiKey(): Promise<string> {
-    const state = await (electrobun as any).rpc.request.getStoredApiKey({});
+    const state = await electrobun.rpc.request.getStoredApiKey({});
     return (state?.apiKey ?? "").trim();
   }
 
   async function updateInterpolatedValue() {
     try {
-      const interpolatedData = await (
-        electrobun as any
-      ).rpc.request.getInterpolatedOvertimeData({});
+      const interpolatedData = await electrobun.rpc.request.getInterpolatedOvertimeData(
+        {},
+      );
       if (interpolatedData) {
         updateOvertimeDisplay(interpolatedData, overtimeValue);
       }
@@ -86,7 +88,7 @@ export function initializeDashboard(
     lastFetchTime = Date.now();
 
     try {
-      const data = await (electrobun as any).rpc.request.analyzeOvertime({
+      const data = await electrobun.rpc.request.analyzeOvertime({
         apiKey,
         year,
       });
