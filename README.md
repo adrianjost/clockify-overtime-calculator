@@ -9,15 +9,22 @@ Native macOS desktop app built with Electrobun.
 - Run overtime analysis from the Bun process
 - View the same report output format as the original CLI in plain text
 
-## Run
+## Setup
 
 1. Install dependencies:
    bun install
 
-2. Start app in dev mode:
+2. Install pre-commit hooks:
+   bun scripts/setup-hooks.sh
+
+   This ensures code is automatically formatted with oxfmt and prettier before each commit.
+
+## Run
+
+1. Start app in dev mode:
    bun start
 
-3. In the app window:
+2. In the app window:
    - Paste your Clockify API key
    - Enter a year
    - Click Analyze

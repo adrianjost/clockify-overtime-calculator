@@ -1,0 +1,30 @@
+#!/bin/bash
+
+# Pre-commit hook to format code with prettier and oxfmt
+# This hook runs prettier and oxfmt on staged files to ensure consistent code formatting
+
+set -e
+
+# Get the list of staged files
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx|json|css|html|md)$' || true)
+
+if [ -z "$STAGED_FILES" ]; then
+  exit 0
+fi
+
+# Run oxfmt on TypeScript files
+TS_FILES=$(echo "$STAGED_FILES" | grep -E '\.(ts|tsx)$' || true)
+if [ -n "$TS_FILES" ]; then
+  echo "Formatting staged TypeScript files with oxfmt..."
+  bunx oxfmt $TS_FILES
+fi
+
+# Run prettier on staged files
+echo "Formatting staged files with prettier..."
+bun prettier --write $STAGED_FILES
+
+# Re-add the formatted files to the staging area
+echo "Re-staging formatted files..."
+git add $STAGED_FILES
+
+echo "✓ Code formatting complete"
