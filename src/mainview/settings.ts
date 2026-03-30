@@ -1,7 +1,10 @@
 import type { Electroview } from "electrobun/view";
+import type { AppRPC } from "../shared/rpc.ts";
+
+type ElectrobunClient = Electroview<AppRPC>;
 
 export function initializeSettings(
-  electrobun: Electroview<any>,
+  electrobun: ElectrobunClient,
   onSettingsSaved: () => void,
   onCancel?: () => void,
 ) {
@@ -41,7 +44,7 @@ export function initializeSettings(
       const enabled = trayEnabledCheckbox.checked;
       localStorage.setItem("tray_enabled", String(enabled));
       try {
-        await (electrobun as any).rpc.request.setTrayEnabled({ enabled });
+        await electrobun.rpc.request.setTrayEnabled({ enabled });
       } catch (err) {
         console.error("setTrayEnabled failed:", err);
         trayEnabledCheckbox.checked = !enabled;
@@ -63,7 +66,7 @@ export function initializeSettings(
       const enabled = launchAtLoginCheckbox.checked;
       localStorage.setItem("launch_at_login", String(enabled));
       try {
-        await (electrobun as any).rpc.request.setLaunchAtLogin({ enabled });
+        await electrobun.rpc.request.setLaunchAtLogin({ enabled });
       } catch (err) {
         console.error("setLaunchAtLogin failed:", err);
         // Revert checkbox on failure
@@ -93,15 +96,13 @@ export function initializeSettings(
 
   void (async () => {
     try {
-      const state = await (electrobun as any).rpc.request.getStoredApiKey({});
+      const state = await electrobun.rpc.request.getStoredApiKey({});
       const secureApiKey = (state?.apiKey ?? "").trim();
       if (secureApiKey) {
         apiKeyInput.value = secureApiKey;
         hasStoredApiKey = true;
         if (trayEnabledCheckbox) {
-          const trayState = await (
-            electrobun as any
-          ).rpc.request.getTrayEnabled({});
+          const trayState = await electrobun.rpc.request.getTrayEnabled({});
           const enabled = Boolean(trayState?.enabled);
           trayEnabledCheckbox.checked = enabled;
           localStorage.setItem("tray_enabled", String(enabled));
@@ -118,7 +119,7 @@ export function initializeSettings(
 
     if (apiKeyInput.value.trim()) {
       try {
-        await (electrobun as any).rpc.request.setStoredApiKey({
+        await electrobun.rpc.request.setStoredApiKey({
           apiKey: apiKeyInput.value,
         });
       } catch (err) {
@@ -164,14 +165,14 @@ export function initializeSettings(
       localStorage.clear();
 
       try {
-        await (electrobun as any).rpc.request.clearStoredApiKey({});
+        await electrobun.rpc.request.clearStoredApiKey({});
       } catch (err) {
         console.error("clearStoredApiKey failed:", err);
       }
 
       hasStoredApiKey = false;
       applyAuthVisibility();
-      (electrobun as any).rpc.request.closeApp({});
+      electrobun.rpc.request.closeApp({});
     });
   }
 }
