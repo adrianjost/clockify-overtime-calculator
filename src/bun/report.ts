@@ -1,7 +1,8 @@
 import { Temporal } from "temporal-polyfill";
 import { formatDuration } from "./date.ts";
 
-const durationPerWorkday = Temporal.Duration.from({ hours: 8 });
+const WORKDAY_HOURS = 8;
+const durationPerWorkday = Temporal.Duration.from({ hours: WORKDAY_HOURS });
 
 export interface OvertimeData {
   totalOvertimeHours: number;
@@ -14,11 +15,21 @@ export interface OvertimeData {
   }>;
 }
 
+/**
+ * Build overtime data for a given year from time entries.
+ *
+ * Calculates daily and cumulative overtime by comparing actual work hours
+ * to expected 8-hour workdays (excluding weekends).
+ *
+ * @param year - The year to analyze
+ * @param data - Map of date strings to Temporal.Duration of work hours
+ * @returns OvertimeData with daily breakdowns and totals
+ */
 export function buildOvertimeData(
   year: number,
   data: Map<string, Temporal.Duration>,
 ): OvertimeData {
-  const dailyData: OvertimeData['dailyData'] = [];
+  const dailyData: OvertimeData["dailyData"] = [];
   let expectedWorkDuration = Temporal.Duration.from({ hours: 0 });
   let actualWorkDuration = Temporal.Duration.from({ hours: 0 });
   const today = Temporal.Now.plainDateISO();
@@ -36,7 +47,7 @@ export function buildOvertimeData(
       let expectedHours = 0;
       if (day.dayOfWeek !== 6 && day.dayOfWeek !== 7) {
         expectedWorkDuration = expectedWorkDuration.add(durationPerWorkday);
-        expectedHours = 8;
+        expectedHours = WORKDAY_HOURS;
       }
       actualWorkDuration = actualWorkDuration.add(workDuration);
       const cumulativeOvertime = actualWorkDuration.subtract(
@@ -60,12 +71,28 @@ export function buildOvertimeData(
   };
 }
 
+/**
+ * Format an overtime duration with sign and spacing.
+ *
+ * @param overtime - The overtime duration
+ * @returns Formatted string with sign, e.g., "+8h 30min" or "-2h 0min"
+ */
 function formatOvertime(overtime: Temporal.Duration): string {
   const overtimeSign = overtime.sign >= 0 ? "+" : "-";
   const overtimeFormatted = formatDuration(overtime.abs(), "hoursMinutes");
   return `${overtimeSign}${overtimeFormatted}`;
 }
 
+/**
+ * Build a human-readable overtime report for a year.
+ *
+ * Generates a report with weekly and daily breakdowns of actual vs. expected hours
+ * and cumulative overtime.
+ *
+ * @param year - The year to report on
+ * @param data - Map of date strings to Temporal.Duration of work hours
+ * @returns Multi-line string report
+ */
 export function buildOvertimeReport(
   year: number,
   data: Map<string, Temporal.Duration>,
