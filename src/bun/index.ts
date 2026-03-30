@@ -28,8 +28,6 @@ const HOME = Bun.env["HOME"] ?? process.cwd();
 const WINDOW_MARGIN = 24;
 const MIN_WINDOW_WIDTH = 400;
 const MIN_WINDOW_HEIGHT = 450;
-const WINDOW_WIDTH = MIN_WINDOW_WIDTH;
-const WINDOW_HEIGHT = MIN_WINDOW_HEIGHT;
 
 const WINDOW_STATE_DIR = join(HOME, ".clockify-overtime");
 const WINDOW_STATE_FILE = join(WINDOW_STATE_DIR, "window-state.json");
@@ -46,6 +44,13 @@ const LAUNCH_AGENT_PLIST = join(
   `${LAUNCH_AGENT_LABEL}.plist`,
 );
 
+// Timeouts and intervals
+const SENTINEL_FILE_FRESHNESS_MS = 30_000; // 30 seconds
+const FETCH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const DISPLAY_UPDATE_INTERVAL_MS = 1000; // 1 second
+const WINDOW_CLAMP_DEBOUNCE_MS = 120; // 120ms
+const WINDOW_PERSIST_DEBOUNCE_MS = 200; // 200ms
+
 // ─── Startup detection ────────────────────────────────────────────────────────
 // The LaunchAgent creates the sentinel file right before opening the app.
 // If it exists and is < 30 s old we know this is a background auto-launch.
@@ -53,7 +58,7 @@ function isAutoLaunch(): boolean {
   try {
     if (!existsSync(AT_LOGIN_SENTINEL)) return false;
     const { mtimeMs } = statSync(AT_LOGIN_SENTINEL);
-    const fresh = Date.now() - mtimeMs < 30_000;
+    const fresh = Date.now() - mtimeMs < SENTINEL_FILE_FRESHNESS_MS;
     unlinkSync(AT_LOGIN_SENTINEL);
     return fresh;
   } catch {
@@ -73,7 +78,7 @@ function loadStoredWindowSize(workArea: { width: number; height: number }): {
   width: number;
   height: number;
 } {
-  const fallback = { width: WINDOW_WIDTH, height: WINDOW_HEIGHT };
+  const fallback = { width: MIN_WINDOW_WIDTH, height: MIN_WINDOW_HEIGHT };
   try {
     const raw = readFileSync(WINDOW_STATE_FILE, "utf8");
     const parsed = JSON.parse(raw) as Partial<{
@@ -319,7 +324,6 @@ function getCurrentInterpolatedOvertimeData(): OvertimeData | null {
   }
 
   const elapsedMs = Date.now() - lastFetchTime;
-  const FETCH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
   // If time since fetch exceeds interval, return current data (new fetch should have happened)
   if (elapsedMs >= FETCH_INTERVAL_MS) {
@@ -517,7 +521,6 @@ function startTrayUpdateIntervals(): void {
   if (trayDisplayInterval) clearInterval(trayDisplayInterval);
 
   // Update tray data every 5 minutes
-  const FETCH_INTERVAL_MS = 5 * 60 * 1000;
   trayUpdateInterval = setInterval(async () => {
     if (!currentApiKey || !trayEnabled) return;
     try {
@@ -539,7 +542,7 @@ function startTrayUpdateIntervals(): void {
         tray.setTitle(trayTitle);
       }
     }
-  }, 1000);
+  }, DISPLAY_UPDATE_INTERVAL_MS);
 }
 
 function stopTrayUpdateIntervals(): void {
@@ -686,14 +689,14 @@ function createMainWindow(hidden: boolean): BrowserWindow {
         win.setSize(width, height);
       }
       clampTimer = null;
-    }, 120);
+    }, WINDOW_CLAMP_DEBOUNCE_MS);
 
     if (persistTimer) clearTimeout(persistTimer);
 
     persistTimer = setTimeout(() => {
       persistWindowSize(clampedWidth, clampedHeight);
       persistTimer = null;
-    }, 200);
+    }, WINDOW_PERSIST_DEBOUNCE_MS);
   });
 
   win.on("close", () => {
