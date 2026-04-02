@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Native macOS desktop app for Clockify overtime analysis",
   "scripts": {
+    "setup": "bun install && bash scripts/setup-hooks.sh && bun run generate-icons",
     "start": "electrobun dev",
     "dev": "electrobun dev --watch",
     "format": "oxfmt --write",
