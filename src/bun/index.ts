@@ -521,6 +521,9 @@ const rpc = BrowserView.defineRPC<AppRPC>({
       }) => {
         const data = await analyzeAndUpdateTray(apiKey, startDate, endDate);
         currentApiKey = apiKey;
+        // Sync UI's start date back to tray preferences so background interval uses same range
+        overtimeStartDate = startDate;
+        persistPreferences({ trayEnabled, startDate: overtimeStartDate });
         // Start background update intervals when user successfully analyzes
         if (trayEnabled) {
           startTrayUpdateIntervals();
