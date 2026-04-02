@@ -51,6 +51,7 @@ const handleNavigation = () => {
 };
 
 window.addEventListener("hashchange", handleNavigation);
+handleNavigation();
 
 try {
   // Initialize both views

@@ -311,7 +311,6 @@ let trayUpdateInterval: ReturnType<typeof setInterval> | null = null;
 
 // Calculate current API key and year for background updates
 let currentApiKey: string | null = null;
-let currentYear: number = new Date().getFullYear();
 
 function setDockVisible(visible: boolean) {
   try {
@@ -462,14 +461,13 @@ async function refreshTrayDataOnLaunch(): Promise<void> {
   const apiKey = loadStoredApiKey();
   if (!apiKey) return;
 
-  const startDate = overtimeStartDate || new Date().toISOString().split("T")[0];
   const today = new Date();
+  const startDate = overtimeStartDate || `${today.getFullYear()}-01-01`;
   const endDate = today.toISOString().split("T")[0];
 
   try {
     await analyzeAndUpdateTray(apiKey, startDate, endDate);
     currentApiKey = apiKey;
-    currentYear = Number.parseInt(startDate.slice(0, 4), 10);
     startTrayUpdateIntervals();
   } catch (err) {
     console.error("Launch-time tray refresh failed:", err);
@@ -485,9 +483,9 @@ function startTrayUpdateIntervals(): void {
   trayUpdateInterval = setInterval(async () => {
     if (!currentApiKey || !trayEnabled) return;
     try {
-      const startDate =
-        overtimeStartDate || new Date().toISOString().split("T")[0];
-      const endDate = new Date().toISOString().split("T")[0];
+      const now = new Date();
+      const startDate = overtimeStartDate || `${now.getFullYear()}-01-01`;
+      const endDate = now.toISOString().split("T")[0];
       await analyzeAndUpdateTray(currentApiKey, startDate, endDate);
     } catch (err) {
       console.error("Background tray update failed:", err);
@@ -523,7 +521,6 @@ const rpc = BrowserView.defineRPC<AppRPC>({
       }) => {
         const data = await analyzeAndUpdateTray(apiKey, startDate, endDate);
         currentApiKey = apiKey;
-        currentYear = Number.parseInt(endDate.slice(0, 4), 10);
         // Start background update intervals when user successfully analyzes
         if (trayEnabled) {
           startTrayUpdateIntervals();

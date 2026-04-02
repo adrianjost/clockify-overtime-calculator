@@ -209,10 +209,13 @@ function updateOvertimeDisplay(
 ) {
   if (!overtimeValue) return;
 
-  const sign = data.totalOvertimeHours >= 0 ? "+" : "";
-  const displayText = `${sign}${data.totalOvertimeHours}h ${data.totalOvertimeMinutes}min`;
+  const totalMinutes = data.totalOvertimeHours * 60 + data.totalOvertimeMinutes;
+  const sign = totalMinutes >= 0 ? "+" : "-";
+  const absHours = Math.floor(Math.abs(totalMinutes) / 60);
+  const absMinutes = Math.abs(totalMinutes) % 60;
+  const displayText = `${sign}${absHours}h ${absMinutes}min`;
   overtimeValue.textContent = displayText;
-  if (data.totalOvertimeHours < 0) {
+  if (totalMinutes < 0) {
     overtimeValue.style.color = "#b42318";
   } else {
     overtimeValue.style.color = "#0e7c66";
@@ -265,11 +268,13 @@ function renderCharts(data: OvertimeData) {
     const showDayLabels = visibleCount <= 60;
 
     const displayLabels = dailyDates.map((date, index) => {
-      const current = new Date(date);
+      const current = new Date(date + "T00:00:00");
       const isFirstEntry = index === 0;
       let previousMonth = -1;
       if (index > 0) {
-        previousMonth = new Date(dailyDates[index - 1]).getMonth();
+        previousMonth = new Date(
+          dailyDates[index - 1] + "T00:00:00",
+        ).getMonth();
       }
       const isNewMonth = current.getMonth() !== previousMonth;
 
@@ -471,11 +476,11 @@ function aggregateToWeekly(
 
   // Create labels (show first week only, or month changes)
   const labels = dates.map((date, index) => {
-    const current = new Date(date);
+    const current = new Date(date + "T00:00:00");
     let previousMonth = -1;
 
     if (index > 0) {
-      const previous = new Date(dates[index - 1]);
+      const previous = new Date(dates[index - 1] + "T00:00:00");
       previousMonth = previous.getMonth();
     }
 
@@ -692,7 +697,7 @@ function setupChartInteraction(container: HTMLDivElement): void {
 }
 
 function getWeekKey(isoDate: string): string {
-  const date = new Date(isoDate);
+  const date = new Date(isoDate + "T00:00:00");
   const day = date.getDay();
   const offsetToMonday = day === 0 ? -6 : 1 - day;
   date.setDate(date.getDate() + offsetToMonday);
@@ -965,8 +970,8 @@ function fillMissingDays(
 
   // Start from the first actual data entry, not from Jan 1
   // This respects custom start dates
-  const start = new Date(firstEntry.date);
-  const end = new Date(lastEntry.date);
+  const start = new Date(firstEntry.date + "T00:00:00");
+  const end = new Date(lastEntry.date + "T00:00:00");
 
   const result: OvertimeData["dailyData"] = [];
   let lastCumulativeOvertime = 0;

@@ -73,7 +73,7 @@ export const fetchTimeEntries = async (
 
   const timeEntries: TimeEntry[] = [];
 
-  let page = 0;
+  let page = 1;
   while (true) {
     const response = await fetchWithRetry(
       `${CLOCKIFY_API_BASE}/workspaces/${workspaceID}/user/${userID}/time-entries?start=${fromString}&end=${toString}&page-size=${TIME_ENTRIES_PAGE_SIZE}&page=${page}`,
@@ -142,7 +142,7 @@ export const fetchYear = async (
     if (entry.timeInterval.duration === null) {
       const start = Temporal.Instant.from(entry.timeInterval.start);
       const end = Temporal.Now.instant();
-      duration = Temporal.Duration.from({ seconds: end.since(start).seconds });
+      duration = end.since(start).round({ largestUnit: "hours" });
     } else {
       duration = Temporal.Duration.from(entry.timeInterval.duration);
     }
