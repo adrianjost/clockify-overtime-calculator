@@ -7,14 +7,7 @@ import {
   Tray,
   Utils,
 } from "electrobun/bun";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  statSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fetchActiveUser, fetchYear } from "./clockify.ts";
 import { buildOvertimeData } from "./report.ts";
@@ -37,12 +30,7 @@ const KEYCHAIN_SERVICE = "dev.adrianjost.clockify-overtime";
 const KEYCHAIN_ACCOUNT = "clockify-api-key";
 
 const LAUNCH_AGENT_LABEL = "dev.adrianjost.clockify-overtime";
-const LAUNCH_AGENT_PLIST = join(
-  HOME,
-  "Library",
-  "LaunchAgents",
-  `${LAUNCH_AGENT_LABEL}.plist`,
-);
+const LAUNCH_AGENT_PLIST = join(HOME, "Library", "LaunchAgents", `${LAUNCH_AGENT_LABEL}.plist`);
 
 // Timeouts and intervals
 const SENTINEL_FILE_FRESHNESS_MS = 30_000; // 30 seconds
@@ -106,11 +94,7 @@ function loadStoredWindowSize(workArea: { width: number; height: number }): {
 function persistWindowSize(width: number, height: number): void {
   try {
     mkdirSync(WINDOW_STATE_DIR, { recursive: true });
-    writeFileSync(
-      WINDOW_STATE_FILE,
-      JSON.stringify({ width, height }, null, 2),
-      "utf8",
-    );
+    writeFileSync(WINDOW_STATE_FILE, JSON.stringify({ width, height }, null, 2), "utf8");
   } catch {
     // Best effort persistence.
   }
@@ -132,17 +116,10 @@ function loadPreferences(): { trayEnabled: boolean; startDate?: string } {
   }
 }
 
-function persistPreferences(preferences: {
-  trayEnabled: boolean;
-  startDate?: string;
-}): void {
+function persistPreferences(preferences: { trayEnabled: boolean; startDate?: string }): void {
   try {
     mkdirSync(WINDOW_STATE_DIR, { recursive: true });
-    writeFileSync(
-      PREFERENCES_FILE,
-      JSON.stringify(preferences, null, 2),
-      "utf8",
-    );
+    writeFileSync(PREFERENCES_FILE, JSON.stringify(preferences, null, 2), "utf8");
   } catch {
     // Best effort persistence.
   }
@@ -199,13 +176,7 @@ function persistStoredApiKeyToKeychain(apiKey: string): void {
 }
 
 function clearStoredApiKeyFromKeychain(): void {
-  runSecurityCommand([
-    "delete-generic-password",
-    "-a",
-    KEYCHAIN_ACCOUNT,
-    "-s",
-    KEYCHAIN_SERVICE,
-  ]);
+  runSecurityCommand(["delete-generic-password", "-a", KEYCHAIN_ACCOUNT, "-s", KEYCHAIN_SERVICE]);
 }
 
 function loadStoredApiKey(): string | null {
@@ -363,8 +334,7 @@ function createTray() {
   tray.setMenu([...TRAY_MENU_ITEMS]);
 
   tray.on("tray-clicked", (event: unknown) => {
-    const action =
-      (event as { data?: { action?: string } })?.data?.action ?? "";
+    const action = (event as { data?: { action?: string } })?.data?.action ?? "";
 
     if (action === "quit") {
       process.exit(0);
@@ -418,12 +388,7 @@ async function analyzeAndUpdateTray(
 
   const startYear = Number.parseInt(startDate.slice(0, 4), 10);
   const endYear = Number.parseInt(endDate.slice(0, 4), 10);
-  if (
-    Number.isNaN(startYear) ||
-    startYear < 1970 ||
-    Number.isNaN(endYear) ||
-    endYear > 3000
-  ) {
+  if (Number.isNaN(startYear) || startYear < 1970 || Number.isNaN(endYear) || endYear > 3000) {
     throw new Error("Please provide valid start and end dates.");
   }
 
@@ -434,12 +399,7 @@ async function analyzeAndUpdateTray(
   // Fetch all years covered by the date range and merge into one map
   const mergedData = new Map<string, Temporal.Duration>();
   for (let year = startYear; year <= endYear; year++) {
-    const dataOfYear = await fetchYear(
-      trimmedApiKey,
-      user.defaultWorkspace,
-      user.id,
-      year,
-    );
+    const dataOfYear = await fetchYear(trimmedApiKey, user.defaultWorkspace, user.id, year);
     for (const [date, duration] of dataOfYear) {
       mergedData.set(date, duration);
     }
@@ -551,10 +511,7 @@ const rpc = BrowserView.defineRPC<AppRPC>({
         console.log("[BUN] overtimeStartDate updated to:", overtimeStartDate);
       },
       getOvertimeStartDate: async () => {
-        console.log(
-          "[BUN] getOvertimeStartDate called, returning:",
-          overtimeStartDate,
-        );
+        console.log("[BUN] getOvertimeStartDate called, returning:", overtimeStartDate);
         return { startDate: overtimeStartDate };
       },
       setStoredApiKey: async ({ apiKey }: { apiKey: string }) => {
@@ -601,10 +558,7 @@ function createMainWindow(hidden: boolean): BrowserWindow {
       height: windowSize.height,
       x:
         primaryDisplay.workArea.x +
-        Math.max(
-          0,
-          primaryDisplay.workArea.width - windowSize.width - WINDOW_MARGIN,
-        ),
+        Math.max(0, primaryDisplay.workArea.width - windowSize.width - WINDOW_MARGIN),
       y: primaryDisplay.workArea.y + WINDOW_MARGIN,
     },
   });
@@ -613,8 +567,7 @@ function createMainWindow(hidden: boolean): BrowserWindow {
   setDockVisible(!hidden);
 
   win.on("resize", (event: unknown) => {
-    const data = (event as { data?: { width?: number; height?: number } })
-      ?.data;
+    const data = (event as { data?: { width?: number; height?: number } })?.data;
 
     if (
       typeof data?.width !== "number" ||

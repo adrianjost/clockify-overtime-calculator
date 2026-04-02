@@ -16,12 +16,8 @@ const rpc = Electroview.defineRPC<AppRPC>({
 // Create Electroview instance with the RPC definition
 const electrobun: ElectrobunClient = new Electroview({ rpc });
 
-const settingsContainer = document.querySelector(
-  "#settings-container",
-) as HTMLDivElement;
-const dashboardContainer = document.querySelector(
-  "#dashboard-container",
-) as HTMLDivElement;
+const settingsContainer = document.querySelector("#settings-container") as HTMLDivElement;
+const dashboardContainer = document.querySelector("#dashboard-container") as HTMLDivElement;
 
 if (!settingsContainer || !dashboardContainer) {
   console.error("App containers are missing");

@@ -1,7 +1,6 @@
 #!/bin/bash
 
-# Pre-commit hook to format code with prettier and oxfmt
-# This hook runs prettier and oxfmt on staged files to ensure consistent code formatting
+# Pre-commit hook to format code via the project formatter script
 
 set -e
 
@@ -12,16 +11,9 @@ if [ -z "$STAGED_FILES" ]; then
   exit 0
 fi
 
-# Run oxfmt on TypeScript files
-TS_FILES=$(echo "$STAGED_FILES" | grep -E '\.(ts|tsx)$' || true)
-if [ -n "$TS_FILES" ]; then
-  echo "Formatting staged TypeScript files with oxfmt..."
-  bunx oxfmt $TS_FILES
-fi
-
-# Run prettier on staged files
-echo "Formatting staged files with prettier..."
-bun prettier --write $STAGED_FILES
+# Run project formatter
+echo "Formatting source with bun run format..."
+bun run format
 
 # Re-add the formatted files to the staging area
 echo "Re-staging formatted files..."

@@ -32,27 +32,17 @@
               placeholder="e.g. AbCdEfGh12345678"
               autocomplete="off"
             />
-            <p class="hint">
-              Your API key is stored locally on this device and never shared.
-            </p>
+            <p class="hint">Your API key is stored locally on this device and never shared.</p>
             <span id="save-status"></span>
           </div>
         </div>
 
         <div class="settings-section">
-          <div
-            class="form-group form-group--inline"
-            id="launch-at-login-group"
-            hidden
-          >
+          <div class="form-group form-group--inline" id="launch-at-login-group" hidden>
             <label for="launch-at-login">Launch at login</label>
             <input type="checkbox" id="launch-at-login" />
           </div>
-          <div
-            class="form-group form-group--inline"
-            id="tray-enabled-group"
-            hidden
-          >
+          <div class="form-group form-group--inline" id="tray-enabled-group" hidden>
             <label for="tray-enabled">Show menu bar item</label>
             <input type="checkbox" id="tray-enabled" />
           </div>
@@ -74,38 +64,29 @@
               <strong>API</strong> section.
             </li>
             <li>
-              Click <strong>Generate</strong> (or copy the existing key) and
-              paste it into the field above.
+              Click <strong>Generate</strong> (or copy the existing key) and paste it into the field
+              above.
             </li>
           </ol>
           <h2>What data is accessed</h2>
           <p>
-            The app only reads your own time entries using the standard Clockify
-            personal API key &mdash; no special permissions or admin access are
-            required. Specifically, it fetches:
+            The app only reads your own time entries using the standard Clockify personal API key
+            &mdash; no special permissions or admin access are required. Specifically, it fetches:
           </p>
           <ul>
             <li>Your user profile (to identify your workspace)</li>
             <li>Your time entries for the selected date range</li>
           </ul>
-          <p>
-            No data is written back to Clockify and nothing leaves this device.
-          </p>
+          <p>No data is written back to Clockify and nothing leaves this device.</p>
         </div>
 
         <div class="settings-danger-zone">
-          <button id="reset-all-btn" class="btn-danger">
-            Reset all stored data
-          </button>
+          <button id="reset-all-btn" class="btn-danger">Reset all stored data</button>
         </div>
       </div>
 
       <!-- Dashboard View -->
-      <div
-        id="dashboard-container"
-        class="dashboard-view"
-        style="display: none"
-      >
+      <div id="dashboard-container" class="dashboard-view" style="display: none">
         <div class="dashboard-header">
           <div>
             <h1>Overtime</h1>
@@ -137,13 +118,7 @@
         </div>
 
         <div class="chart-footer">
-          <a
-            href="#settings"
-            class="btn-icon"
-            aria-label="Settings"
-            title="Settings"
-            >&#9881;</a
-          >
+          <a href="#settings" class="btn-icon" aria-label="Settings" title="Settings">&#9881;</a>
         </div>
       </div>
     </div>

@@ -16,13 +16,9 @@ export function initializeSettings(
   }
 
   // Hide reset button, close button, and launch-at-login during initial onboarding
-  const dangerZone = document.querySelector<HTMLElement>(
-    ".settings-danger-zone",
-  );
+  const dangerZone = document.querySelector<HTMLElement>(".settings-danger-zone");
 
-  const closeBtn = document.querySelector<HTMLButtonElement>(
-    "#close-settings-btn",
-  );
+  const closeBtn = document.querySelector<HTMLButtonElement>("#close-settings-btn");
   if (closeBtn) {
     closeBtn.addEventListener("click", () => {
       onCancel?.();
@@ -30,14 +26,10 @@ export function initializeSettings(
   }
 
   // Tray visibility toggle — only shown when API key already exists
-  const trayEnabledGroup = document.querySelector<HTMLElement>(
-    "#tray-enabled-group",
-  );
-  const trayEnabledCheckbox =
-    document.querySelector<HTMLInputElement>("#tray-enabled");
+  const trayEnabledGroup = document.querySelector<HTMLElement>("#tray-enabled-group");
+  const trayEnabledCheckbox = document.querySelector<HTMLInputElement>("#tray-enabled");
   if (trayEnabledCheckbox) {
-    trayEnabledCheckbox.checked =
-      localStorage.getItem("tray_enabled") !== "false";
+    trayEnabledCheckbox.checked = localStorage.getItem("tray_enabled") !== "false";
 
     trayEnabledCheckbox.addEventListener("change", async () => {
       const enabled = trayEnabledCheckbox.checked;
@@ -53,14 +45,10 @@ export function initializeSettings(
   }
 
   // Launch at login toggle — only shown when API key already exists
-  const launchAtLoginGroup = document.querySelector<HTMLElement>(
-    "#launch-at-login-group",
-  );
-  const launchAtLoginCheckbox =
-    document.querySelector<HTMLInputElement>("#launch-at-login");
+  const launchAtLoginGroup = document.querySelector<HTMLElement>("#launch-at-login-group");
+  const launchAtLoginCheckbox = document.querySelector<HTMLInputElement>("#launch-at-login");
   if (launchAtLoginCheckbox) {
-    launchAtLoginCheckbox.checked =
-      localStorage.getItem("launch_at_login") === "true";
+    launchAtLoginCheckbox.checked = localStorage.getItem("launch_at_login") === "true";
     launchAtLoginCheckbox.addEventListener("change", async () => {
       const enabled = launchAtLoginCheckbox.checked;
       localStorage.setItem("launch_at_login", String(enabled));

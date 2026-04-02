@@ -14,17 +14,12 @@ export function initializeDashboard(
   electrobun: ElectrobunClient,
   onNavigateToSettings: () => void,
 ) {
-  const startDateInput = document.querySelector<HTMLInputElement>(
-    "#dashboard-start-date",
-  );
-  const endDateInput = document.querySelector<HTMLInputElement>(
-    "#dashboard-end-date",
-  );
+  const startDateInput = document.querySelector<HTMLInputElement>("#dashboard-start-date");
+  const endDateInput = document.querySelector<HTMLInputElement>("#dashboard-end-date");
   const lastFetchedEl = document.querySelector<HTMLDivElement>("#last-fetched");
   const fetchSpinner = document.querySelector<HTMLElement>("#fetch-spinner");
   const content = document.querySelector<HTMLDivElement>("#content");
-  const overtimeValue =
-    document.querySelector<HTMLDivElement>("#overtime-value");
+  const overtimeValue = document.querySelector<HTMLDivElement>("#overtime-value");
   let lastData: OvertimeData | null = null;
   let resizeRafId: number | null = null;
 
@@ -203,10 +198,7 @@ function renderDashboard(
   renderCharts(data);
 }
 
-function updateOvertimeDisplay(
-  data: OvertimeData,
-  overtimeValue: HTMLDivElement | null,
-) {
+function updateOvertimeDisplay(data: OvertimeData, overtimeValue: HTMLDivElement | null) {
   if (!overtimeValue) return;
 
   const totalMinutes = data.totalOvertimeHours * 60 + data.totalOvertimeMinutes;
@@ -229,8 +221,7 @@ function renderCharts(data: OvertimeData) {
       dailyDataLength: data.dailyData.length,
     });
 
-    const dailyContainer =
-      document.querySelector<HTMLDivElement>("#daily-chart");
+    const dailyContainer = document.querySelector<HTMLDivElement>("#daily-chart");
 
     if (!dailyContainer) {
       console.error("Daily chart container not found");
@@ -252,10 +243,7 @@ function renderCharts(data: OvertimeData) {
           end: Math.min(totalLen - 1, focusRange.end),
         }
       : { start: 0, end: totalLen - 1 };
-    const visibleData = filledDailyData.slice(
-      effective.start,
-      effective.end + 1,
-    );
+    const visibleData = filledDailyData.slice(effective.start, effective.end + 1);
 
     // Prepare data from visible slice
     const dailyDates = visibleData.map((d) => d.date);
@@ -272,9 +260,7 @@ function renderCharts(data: OvertimeData) {
       const isFirstEntry = index === 0;
       let previousMonth = -1;
       if (index > 0) {
-        previousMonth = new Date(
-          dailyDates[index - 1] + "T00:00:00",
-        ).getMonth();
+        previousMonth = new Date(dailyDates[index - 1] + "T00:00:00").getMonth();
       }
       const isNewMonth = current.getMonth() !== previousMonth;
 
@@ -301,23 +287,16 @@ function renderCharts(data: OvertimeData) {
     });
 
     // Render bar chart
-    const chartWidth = Math.max(
-      360,
-      Math.floor(dailyContainer.clientWidth || 800),
-    );
+    const chartWidth = Math.max(360, Math.floor(dailyContainer.clientWidth || 800));
 
     // Get available height from the charts-container flex space
-    const chartsContainer =
-      document.querySelector<HTMLDivElement>(".charts-container");
+    const chartsContainer = document.querySelector<HTMLDivElement>(".charts-container");
     let chartHeight = 300; // default
     if (chartsContainer) {
       // Account for chart title (h2) and margins
       const h2 = dailyContainer.parentElement?.querySelector("h2");
       const h2Height = h2 ? h2.offsetHeight + 8 : 0;
-      const availableHeight = Math.max(
-        200,
-        chartsContainer.clientHeight - h2Height - 16,
-      );
+      const availableHeight = Math.max(200, chartsContainer.clientHeight - h2Height - 16);
       chartHeight = Math.min(400, availableHeight);
     }
 
@@ -326,10 +305,10 @@ function renderCharts(data: OvertimeData) {
 
     // Build cumulative on full data for correct running totals, then slice
     const cumulativeMode: CumulativeMode = shouldUseWeekly ? "weekly" : "daily";
-    const cumulativeHours = buildCumulativeSeries(
-      filledDailyData,
-      cumulativeMode,
-    ).slice(effective.start, effective.end + 1);
+    const cumulativeHours = buildCumulativeSeries(filledDailyData, cumulativeMode).slice(
+      effective.start,
+      effective.end + 1,
+    );
 
     let dataToUse = actualHours;
     let cumulativeToUse = cumulativeHours;
@@ -351,9 +330,7 @@ function renderCharts(data: OvertimeData) {
     // Update chart title; show date range + reset button when zoomed
     const h2Title = dailyContainer.parentElement?.querySelector("h2");
     if (h2Title) {
-      const titleText = shouldUseWeekly
-        ? "Weekly Working Hours"
-        : "Daily Working Hours";
+      const titleText = shouldUseWeekly ? "Weekly Working Hours" : "Daily Working Hours";
       h2Title.innerHTML = "";
       const textSpan = document.createElement("span");
       textSpan.textContent = titleText;
@@ -362,8 +339,7 @@ function renderCharts(data: OvertimeData) {
       if (focusRange !== null) {
         const startDate = new Date(visibleData[0].date);
         const endDate = new Date(visibleData[visibleData.length - 1].date);
-        const fmt = (d: Date) =>
-          d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+        const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
         const rangeSpan = document.createElement("span");
         rangeSpan.className = "chart-range-label";
         rangeSpan.textContent = ` · ${fmt(startDate)}–${fmt(endDate)}`;
@@ -374,9 +350,7 @@ function renderCharts(data: OvertimeData) {
         resetBtn.textContent = "×";
         resetBtn.title = "Reset zoom";
         resetBtn.addEventListener("click", () => {
-          dailyContainer!.dispatchEvent(
-            new CustomEvent("zoom-reset", { bubbles: true }),
-          );
+          dailyContainer!.dispatchEvent(new CustomEvent("zoom-reset", { bubbles: true }));
         });
         h2Title.appendChild(resetBtn);
       }
@@ -453,10 +427,7 @@ function aggregateToWeekly(
     const indices = weekData.indices;
 
     // Sum actual hours for the week
-    const weekHours = indices.reduce(
-      (sum, i) => sum + filledDailyData[i].actualHours,
-      0,
-    );
+    const weekHours = indices.reduce((sum, i) => sum + filledDailyData[i].actualHours, 0);
     hours.push(weekHours);
 
     // Use Monday (first day of week) as the representative date
@@ -464,9 +435,7 @@ function aggregateToWeekly(
     endDates.push(weekData.endDate);
 
     // Weekly reference: 8h for each day with recorded work in this week.
-    const workedDays = indices.filter(
-      (i) => filledDailyData[i].actualHours > 0,
-    ).length;
+    const workedDays = indices.filter((i) => filledDailyData[i].actualHours > 0).length;
     referenceHours.push(workedDays * 8);
 
     // Cumulative is taken from the provided cumulative array (respects mode: daily/weekly)
@@ -528,9 +497,7 @@ function buildCumulativeSeries(
 
   for (const key of weekOrder) {
     const indices = weekKeyToIndices.get(key)!;
-    const workedIndices = indices.filter(
-      (i) => filledDailyData[i].actualHours > 0,
-    );
+    const workedIndices = indices.filter((i) => filledDailyData[i].actualHours > 0);
 
     if (workedIndices.length === 0) {
       // No work this week – hold flat at the previous cumulative.
@@ -542,8 +509,7 @@ function buildCumulativeSeries(
 
     const firstWorked = workedIndices[0];
     const lastWorked = workedIndices[workedIndices.length - 1];
-    const weekEndCumulative =
-      filledDailyData[lastWorked].cumulativeOvertimeHours;
+    const weekEndCumulative = filledDailyData[lastWorked].cumulativeOvertimeHours;
 
     for (const i of indices) {
       if (i < firstWorked) {
@@ -576,9 +542,7 @@ function setupChartInteraction(container: HTMLDivElement): void {
   let zoomAccumulator = 0;
 
   function dispatchRerender() {
-    container.dispatchEvent(
-      new CustomEvent("chart-interaction", { bubbles: true }),
-    );
+    container.dispatchEvent(new CustomEvent("chart-interaction", { bubbles: true }));
   }
 
   // Scroll to zoom in/out, centered on the mouse position
@@ -593,10 +557,7 @@ function setupChartInteraction(container: HTMLDivElement): void {
       const visibleCount = current.end - current.start + 1;
 
       const rect = container.getBoundingClientRect();
-      const relX = Math.max(
-        0,
-        Math.min(1, (e.clientX - rect.left) / rect.width),
-      );
+      const relX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
 
       // macOS trackpad sends many small deltaY events; normalise to avoid
       // over-sensitivity. Clamp per-event contribution to ±30 units.
@@ -616,9 +577,7 @@ function setupChartInteraction(container: HTMLDivElement): void {
 
       // Each step shrinks/grows the visible range by ~20%
       const factor = steps > 0 ? Math.pow(0.8, steps) : Math.pow(1.25, -steps);
-      const newCount = Math.round(
-        Math.max(14, Math.min(len, visibleCount * factor)),
-      );
+      const newCount = Math.round(Math.max(14, Math.min(len, visibleCount * factor)));
 
       if (newCount >= len) {
         focusRange = null;
@@ -725,16 +684,12 @@ function createBarChart(
   svg.setAttribute("height", String(height));
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
 
-  const maxReferenceHours = isWeeklyView
-    ? Math.max(...(weeklyReferenceHours ?? [0]), 0)
-    : 8;
+  const maxReferenceHours = isWeeklyView ? Math.max(...(weeklyReferenceHours ?? [0]), 0) : 8;
   const rawMax = Math.max(...data, maxReferenceHours, 1);
   // Coarser ticks on narrow widths or short heights
   const maxLeftTicks = width < 640 ? 5 : height < 250 ? 5 : 8;
   // Step must be a divisor of 8 so both 0 and the reference line value fit cleanly.
-  const leftStep =
-    ([2, 4, 8] as const).find((s) => Math.ceil(rawMax / s) <= maxLeftTicks) ??
-    8;
+  const leftStep = ([2, 4, 8] as const).find((s) => Math.ceil(rawMax / s) <= maxLeftTicks) ?? 8;
   const leftMax = Math.ceil(rawMax / leftStep) * leftStep;
   const barWidth = chartWidth / data.length;
 
@@ -744,9 +699,7 @@ function createBarChart(
   const rawCumRange = rawCumMax - rawCumMin || 1;
   const maxRightTicks = width < 640 ? 5 : height < 250 ? 5 : 8;
   const rightStep =
-    ([1, 2, 5, 10, 20, 50, 100] as const).find(
-      (s) => rawCumRange / s <= maxRightTicks,
-    ) ?? 100;
+    ([1, 2, 5, 10, 20, 50, 100] as const).find((s) => rawCumRange / s <= maxRightTicks) ?? 100;
   const cumulativeMin = Math.floor(rawCumMin / rightStep) * rightStep;
   const cumulativeMax = Math.ceil(rawCumMax / rightStep) * rightStep;
   const cumulativeRange = cumulativeMax - cumulativeMin || 1;
@@ -798,12 +751,8 @@ function createBarChart(
     if (isWeeklyView) {
       const referenceHours = weeklyReferenceHours?.[index] ?? 0;
       if (referenceHours > 0) {
-        const yReference =
-          padding.top + chartHeight - (referenceHours / leftMax) * chartHeight;
-        const referenceLine = document.createElementNS(
-          "http://www.w3.org/2000/svg",
-          "line",
-        );
+        const yReference = padding.top + chartHeight - (referenceHours / leftMax) * chartHeight;
+        const referenceLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
         referenceLine.setAttribute("x1", String(x));
         referenceLine.setAttribute("y1", String(yReference));
         referenceLine.setAttribute("x2", String(x + actualBarWidth));
@@ -819,10 +768,7 @@ function createBarChart(
     // X-axis labels
     const labelX = x + actualBarWidth / 2;
     if (labels[index] && labelX - lastLabelX >= minLabelSpacing) {
-      const text = document.createElementNS(
-        "http://www.w3.org/2000/svg",
-        "text",
-      );
+      const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
       text.setAttribute("x", String(labelX));
       text.setAttribute("y", String(padding.top + chartHeight + 15));
       text.setAttribute("text-anchor", "middle");
@@ -837,10 +783,7 @@ function createBarChart(
   // Daily view keeps a fixed 8h full-width reference line.
   if (!isWeeklyView) {
     const yReference = padding.top + chartHeight - (8 / leftMax) * chartHeight;
-    const referenceLine = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "line",
-    );
+    const referenceLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
     referenceLine.setAttribute("x1", String(padding.left));
     referenceLine.setAttribute("y1", String(yReference));
     referenceLine.setAttribute("x2", String(padding.left + chartWidth));
@@ -865,10 +808,7 @@ function createBarChart(
 
     const zeroNormalized = (0 - cumulativeMin) / cumulativeRange;
     const yZero = padding.top + chartHeight - zeroNormalized * chartHeight;
-    const zeroLine = document.createElementNS(
-      "http://www.w3.org/2000/svg",
-      "line",
-    );
+    const zeroLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
     zeroLine.setAttribute("x1", String(padding.left));
     zeroLine.setAttribute("y1", String(yZero));
     zeroLine.setAttribute("x2", String(padding.left + chartWidth));
@@ -890,14 +830,8 @@ function createBarChart(
 
     // Right Y-axis integer labels — always includes 0.
     for (let v = cumulativeMin; v <= cumulativeMax; v += rightStep) {
-      const y =
-        padding.top +
-        chartHeight -
-        ((v - cumulativeMin) / cumulativeRange) * chartHeight;
-      const text = document.createElementNS(
-        "http://www.w3.org/2000/svg",
-        "text",
-      );
+      const y = padding.top + chartHeight - ((v - cumulativeMin) / cumulativeRange) * chartHeight;
+      const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
       text.setAttribute("x", String(padding.left + chartWidth + 10));
       text.setAttribute("y", String(y + 5));
       text.setAttribute("text-anchor", "start");
@@ -918,10 +852,7 @@ function createBarChart(
   yAxis.setAttribute("stroke-width", "1");
   svg.appendChild(yAxis);
 
-  const rightAxis = document.createElementNS(
-    "http://www.w3.org/2000/svg",
-    "line",
-  );
+  const rightAxis = document.createElementNS("http://www.w3.org/2000/svg", "line");
   rightAxis.setAttribute("x1", String(padding.left + chartWidth));
   rightAxis.setAttribute("y1", String(padding.top));
   rightAxis.setAttribute("x2", String(padding.left + chartWidth));
@@ -955,9 +886,7 @@ function buildSmoothPath(points: Array<{ x: number; y: number }>): string {
   return path;
 }
 
-function fillMissingDays(
-  dailyData: OvertimeData["dailyData"],
-): OvertimeData["dailyData"] {
+function fillMissingDays(dailyData: OvertimeData["dailyData"]): OvertimeData["dailyData"] {
   if (dailyData.length === 0) {
     return [];
   }
@@ -976,11 +905,7 @@ function fillMissingDays(
   const result: OvertimeData["dailyData"] = [];
   let lastCumulativeOvertime = 0;
 
-  for (
-    let cursor = new Date(start);
-    cursor <= end;
-    cursor.setDate(cursor.getDate() + 1)
-  ) {
+  for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
     const isoDate = formatIsoDate(cursor);
     const existing = byDate.get(isoDate);
 
@@ -1016,12 +941,7 @@ function formatHoursToHoursAndMinutes(hours: number): string {
   return `${wholeHours}h ${minutes}min`;
 }
 
-function showChartTooltip(
-  event: MouseEvent,
-  dateStr: string,
-  hours: number,
-  endDate?: string,
-) {
+function showChartTooltip(event: MouseEvent, dateStr: string, hours: number, endDate?: string) {
   // Remove existing tooltip
   if (activeTooltip) {
     activeTooltip.remove();
@@ -1075,8 +995,7 @@ function showChartTooltip(
   // Position tooltip above the bars
   const rect = (event.target as Element).getBoundingClientRect();
   const tooltipRect = tooltip.getBoundingClientRect();
-  tooltip.style.left =
-    rect.left + rect.width / 2 - tooltipRect.width / 2 + "px";
+  tooltip.style.left = rect.left + rect.width / 2 - tooltipRect.width / 2 + "px";
   tooltip.style.top = rect.top - 30 + "px";
 
   activeTooltip = tooltip;

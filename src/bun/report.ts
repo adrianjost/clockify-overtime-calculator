@@ -67,29 +67,24 @@ export function buildOvertimeData(
         expectedHours = WORKDAY_HOURS;
       }
       actualWorkDuration = actualWorkDuration.add(workDuration);
-      const cumulativeOvertime =
-        actualWorkDuration.subtract(expectedWorkDuration);
+      const cumulativeOvertime = actualWorkDuration.subtract(expectedWorkDuration);
       dailyData.push({
         date: day.toString(),
         actualHours: workDuration.hours + workDuration.minutes / 60,
         expectedHours,
-        cumulativeOvertimeHours:
-          cumulativeOvertime.hours + cumulativeOvertime.minutes / 60,
+        cumulativeOvertimeHours: cumulativeOvertime.hours + cumulativeOvertime.minutes / 60,
       });
     } else if (
-      (Temporal.PlainDate.compare(day, parsedStartDate) === 0 &&
-        dailyData.length === 0) ||
+      (Temporal.PlainDate.compare(day, parsedStartDate) === 0 && dailyData.length === 0) ||
       Temporal.PlainDate.compare(day, parsedEndDate) === 0
     ) {
       // Add anchor entry for start/end date even if no work, to ensure chart spans correct range
-      const cumulativeOvertime =
-        actualWorkDuration.subtract(expectedWorkDuration);
+      const cumulativeOvertime = actualWorkDuration.subtract(expectedWorkDuration);
       dailyData.push({
         date: day.toString(),
         actualHours: 0,
         expectedHours: 0,
-        cumulativeOvertimeHours:
-          cumulativeOvertime.hours + cumulativeOvertime.minutes / 60,
+        cumulativeOvertimeHours: cumulativeOvertime.hours + cumulativeOvertime.minutes / 60,
       });
     }
   }
@@ -124,10 +119,7 @@ function formatOvertime(overtime: Temporal.Duration): string {
  * @param data - Map of date strings to Temporal.Duration of work hours
  * @returns Multi-line string report
  */
-export function buildOvertimeReport(
-  year: number,
-  data: Map<string, Temporal.Duration>,
-): string {
+export function buildOvertimeReport(year: number, data: Map<string, Temporal.Duration>): string {
   const lines: string[] = [];
 
   let weekExpectedWorkDuration = Temporal.Duration.from({ hours: 0 });
@@ -144,9 +136,7 @@ export function buildOvertimeReport(
       break;
     }
     if (day.dayOfWeek === 7 && weekExpectedWorkDuration.hours > 0) {
-      const overtime = weekActualWorkDuration.subtract(
-        weekExpectedWorkDuration,
-      );
+      const overtime = weekActualWorkDuration.subtract(weekExpectedWorkDuration);
       lines.push(
         `${day.subtract({ days: 6 }).toString()} - ${day.toString()}\t${formatDuration(weekActualWorkDuration, "hoursMinutes")}/${formatDuration(weekExpectedWorkDuration, "hoursMinutes")} ${formatOvertime(overtime)}`,
       );
@@ -159,15 +149,12 @@ export function buildOvertimeReport(
     if (workDuration) {
       if (day.dayOfWeek !== 6 && day.dayOfWeek !== 7) {
         expectedWorkDuration = expectedWorkDuration.add(durationPerWorkday);
-        weekExpectedWorkDuration =
-          weekExpectedWorkDuration.add(durationPerWorkday);
+        weekExpectedWorkDuration = weekExpectedWorkDuration.add(durationPerWorkday);
       }
       actualWorkDuration = actualWorkDuration.add(workDuration);
       weekActualWorkDuration = weekActualWorkDuration.add(workDuration);
 
-      lines.push(
-        `\t${day.toString()}\t${formatDuration(workDuration, "hoursMinutes")}`,
-      );
+      lines.push(`\t${day.toString()}\t${formatDuration(workDuration, "hoursMinutes")}`);
     }
   }
 

@@ -64,12 +64,8 @@ export const fetchTimeEntries = async (
   from: Temporal.PlainDate,
   to: Temporal.PlainDate,
 ): Promise<TimeEntry[]> => {
-  const fromString = new Date(
-    new Date(`${from.toString()}T00:00:00Z`).getTime(),
-  ).toISOString();
-  const toString = new Date(
-    new Date(`${to.toString()}T23:59:59Z`).getTime(),
-  ).toISOString();
+  const fromString = new Date(new Date(`${from.toString()}T00:00:00Z`).getTime()).toISOString();
+  const toString = new Date(new Date(`${to.toString()}T23:59:59Z`).getTime()).toISOString();
 
   const timeEntries: TimeEntry[] = [];
 
@@ -84,9 +80,7 @@ export const fetchTimeEntries = async (
     );
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(
-        `Failed to fetch time entries (page ${page}): ${errorText}`,
-      );
+      throw new Error(`Failed to fetch time entries (page ${page}): ${errorText}`);
     }
     const data = (await response.json()) as TimeEntry[];
     timeEntries.push(...data);
@@ -147,8 +141,7 @@ export const fetchYear = async (
       duration = Temporal.Duration.from(entry.timeInterval.duration);
     }
     const currentDuration =
-      durationPerDay.get(date.toString()) ||
-      Temporal.Duration.from({ seconds: 0 });
+      durationPerDay.get(date.toString()) || Temporal.Duration.from({ seconds: 0 });
     durationPerDay.set(date.toString(), currentDuration.add(duration));
   }
   return durationPerDay;

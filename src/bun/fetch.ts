@@ -1,10 +1,7 @@
 const FETCH_MAX_RETRIES = 3;
 const FETCH_RETRY_DELAY_MS = 1000;
 
-export const fetchWithRetry = async (
-  url: string,
-  options: RequestInit,
-): Promise<Response> => {
+export const fetchWithRetry = async (url: string, options: RequestInit): Promise<Response> => {
   let response: Response | undefined;
 
   for (let attempt = 0; attempt < FETCH_MAX_RETRIES; attempt += 1) {

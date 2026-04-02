@@ -11,10 +11,7 @@ type DurationFormat = "hoursMinutes" | "daysHoursMinutes";
  * @param style - The format style: "hoursMinutes" (e.g., "8h 30min") or "daysHoursMinutes" (e.g., "1days 0h 30min")
  * @returns Formatted duration string
  */
-export const formatDuration = (
-  duration: Temporal.Duration,
-  style: DurationFormat,
-): string => {
+export const formatDuration = (duration: Temporal.Duration, style: DurationFormat): string => {
   const roundedDuration = duration.round({
     smallestUnit: "minutes",
     largestUnit: "hours",
