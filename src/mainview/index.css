@@ -152,6 +152,29 @@ body {
   white-space: nowrap;
 }
 
+.date-range-controls {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+  font-size: 0.9rem;
+}
+
+.date-range-controls .form-group {
+  margin-bottom: 0;
+}
+
+.date-range-controls label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.date-range-controls input {
+  padding: 6px 8px;
+  font-size: 0.9rem;
+  width: auto;
+}
+
 .last-fetched {
   font-size: 0.75rem;
   color: var(--text-muted);

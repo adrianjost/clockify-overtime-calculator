@@ -8,11 +8,10 @@ export function initializeSettings(
   onSettingsSaved: () => void,
   onCancel?: () => void,
 ) {
-  const form = document.querySelector<HTMLFormElement>("#settings-form");
   const apiKeyInput = document.querySelector<HTMLInputElement>("#api-key");
   const saveStatus = document.querySelector<HTMLSpanElement>("#save-status");
 
-  if (!form || !apiKeyInput || !saveStatus) {
+  if (!apiKeyInput || !saveStatus) {
     throw new Error("Settings form elements are missing");
   }
 
@@ -114,30 +113,27 @@ export function initializeSettings(
     }
   })();
 
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-
-    if (apiKeyInput.value.trim()) {
+  // Auto-save API key on input change
+  apiKeyInput.addEventListener("change", async () => {
+    const value = apiKeyInput.value.trim();
+    if (value) {
       try {
-        await electrobun.rpc.request.setStoredApiKey({
-          apiKey: apiKeyInput.value,
-        });
+        await electrobun.rpc.request.setStoredApiKey({ apiKey: value });
+        hasStoredApiKey = true;
+        applyAuthVisibility();
+        saveStatus.textContent = "✓ Saved";
+        saveStatus.style.color = "#0e7c66";
+        setTimeout(() => {
+          saveStatus.textContent = "";
+        }, 1000);
       } catch (err) {
         console.error("setStoredApiKey failed:", err);
         saveStatus.textContent = "Failed to save API key";
         saveStatus.style.color = "#b42318";
-        return;
+        setTimeout(() => {
+          saveStatus.textContent = "";
+        }, 2000);
       }
-
-      hasStoredApiKey = true;
-      applyAuthVisibility();
-      saveStatus.textContent = "✓ Saved";
-      saveStatus.style.color = "#0e7c66";
-
-      setTimeout(() => {
-        saveStatus.textContent = "";
-        onSettingsSaved();
-      }, 1000);
     }
   });
 

@@ -46,8 +46,7 @@ const LAUNCH_AGENT_PLIST = join(
 
 // Timeouts and intervals
 const SENTINEL_FILE_FRESHNESS_MS = 30_000; // 30 seconds
-const FETCH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-const DISPLAY_UPDATE_INTERVAL_MS = 1000; // 1 second
+const FETCH_INTERVAL_MS = 60 * 1000; // 1 minute
 const WINDOW_CLAMP_DEBOUNCE_MS = 120; // 120ms
 const WINDOW_PERSIST_DEBOUNCE_MS = 200; // 200ms
 
@@ -117,19 +116,26 @@ function persistWindowSize(width: number, height: number): void {
   }
 }
 
-function loadPreferences(): { trayEnabled: boolean } {
+function loadPreferences(): { trayEnabled: boolean; startDate?: string } {
   try {
     const raw = readFileSync(PREFERENCES_FILE, "utf8");
-    const parsed = JSON.parse(raw) as Partial<{ trayEnabled: boolean }>;
+    const parsed = JSON.parse(raw) as Partial<{
+      trayEnabled: boolean;
+      startDate?: string;
+    }>;
     return {
       trayEnabled: parsed.trayEnabled !== false,
+      startDate: parsed.startDate,
     };
   } catch {
     return { trayEnabled: true };
   }
 }
 
-function persistPreferences(preferences: { trayEnabled: boolean }): void {
+function persistPreferences(preferences: {
+  trayEnabled: boolean;
+  startDate?: string;
+}): void {
   try {
     mkdirSync(WINDOW_STATE_DIR, { recursive: true });
     writeFileSync(
@@ -289,62 +295,6 @@ function formatTrayTitle(data: OvertimeData): string {
   return m > 0 ? `${sign}${h}h ${m}m` : `${sign}${h}h`;
 }
 
-function interpolateOvertimeValue(
-  oldData: OvertimeData,
-  newData: OvertimeData,
-  elapsedMs: number,
-  totalDurationMs: number,
-): OvertimeData {
-  // Linear interpolation between old and new values based on elapsed time
-  const progress = Math.min(1, Math.max(0, elapsedMs / totalDurationMs));
-
-  const oldTotalMinutes =
-    oldData.totalOvertimeHours * 60 + oldData.totalOvertimeMinutes;
-  const newTotalMinutes =
-    newData.totalOvertimeHours * 60 + newData.totalOvertimeMinutes;
-  const interpolatedTotalMinutes =
-    oldTotalMinutes + (newTotalMinutes - oldTotalMinutes) * progress;
-
-  // Convert back to hours and minutes
-  const sign = interpolatedTotalMinutes >= 0 ? 1 : -1;
-  const absMinutes = Math.abs(interpolatedTotalMinutes);
-  const interpolatedHours = sign * Math.floor(absMinutes / 60);
-  // Use floor for minutes to avoid rounding jumps, ensuring smooth progression
-  const interpolatedMinutes = Math.floor(absMinutes % 60);
-
-  return {
-    ...newData,
-    totalOvertimeHours: interpolatedHours,
-    totalOvertimeMinutes: interpolatedMinutes,
-  };
-}
-
-function getCurrentInterpolatedOvertimeData(): OvertimeData | null {
-  if (!currentOvertimeData) {
-    return null;
-  }
-
-  // If we don't have old data yet, just return current data
-  if (!lastFetchedOvertimeData) {
-    return currentOvertimeData;
-  }
-
-  const elapsedMs = Date.now() - lastFetchTime;
-
-  // If time since fetch exceeds interval, return current data (new fetch should have happened)
-  if (elapsedMs >= FETCH_INTERVAL_MS) {
-    return currentOvertimeData;
-  }
-
-  // Interpolate between old and current data
-  return interpolateOvertimeValue(
-    lastFetchedOvertimeData,
-    currentOvertimeData,
-    elapsedMs,
-    FETCH_INTERVAL_MS,
-  );
-}
-
 // ─── State ────────────────────────────────────────────────────────────────────
 
 let mainWindowId: number | null = null;
@@ -352,15 +302,12 @@ let persistTimer: ReturnType<typeof setTimeout> | null = null;
 let clampTimer: ReturnType<typeof setTimeout> | null = null;
 const preferences = loadPreferences();
 let trayEnabled = preferences.trayEnabled;
+let overtimeStartDate = preferences.startDate;
 let trayTitle = "--";
 let tray: Tray | null = null;
 
-// Interpolation state for smooth value transitions
-let lastFetchTime: number = 0;
-let lastFetchedOvertimeData: OvertimeData | null = null;
 let currentOvertimeData: OvertimeData | null = null;
 let trayUpdateInterval: ReturnType<typeof setInterval> | null = null;
-let trayDisplayInterval: ReturnType<typeof setInterval> | null = null;
 
 // Calculate current API key and year for background updates
 let currentApiKey: string | null = null;
@@ -444,7 +391,7 @@ function createTray() {
 
 function setTrayEnabled(enabled: boolean) {
   trayEnabled = enabled;
-  persistPreferences({ trayEnabled });
+  persistPreferences({ trayEnabled, startDate: overtimeStartDate });
 
   if (trayEnabled) {
     createTray();
@@ -462,31 +409,46 @@ function setTrayEnabled(enabled: boolean) {
 
 async function analyzeAndUpdateTray(
   apiKey: string,
-  year: number,
+  startDate: string,
+  endDate: string,
 ): Promise<OvertimeData> {
   const trimmedApiKey = apiKey.trim();
   if (trimmedApiKey.length === 0) {
     throw new Error("Please provide your Clockify API key.");
   }
-  if (!Number.isInteger(year) || year < 1970 || year > 3000) {
-    throw new Error("Please provide a valid year.");
+
+  const startYear = Number.parseInt(startDate.slice(0, 4), 10);
+  const endYear = Number.parseInt(endDate.slice(0, 4), 10);
+  if (
+    Number.isNaN(startYear) ||
+    startYear < 1970 ||
+    Number.isNaN(endYear) ||
+    endYear > 3000
+  ) {
+    throw new Error("Please provide valid start and end dates.");
   }
 
   persistStoredApiKey(trimmedApiKey);
 
   const user = await fetchActiveUser(trimmedApiKey);
-  const dataOfYear = await fetchYear(
-    trimmedApiKey,
-    user.defaultWorkspace,
-    user.id,
-    year,
-  );
-  const overtimeData = buildOvertimeData(year, dataOfYear);
 
-  // Track for interpolation
-  lastFetchedOvertimeData = currentOvertimeData;
+  // Fetch all years covered by the date range and merge into one map
+  const mergedData = new Map<string, Temporal.Duration>();
+  for (let year = startYear; year <= endYear; year++) {
+    const dataOfYear = await fetchYear(
+      trimmedApiKey,
+      user.defaultWorkspace,
+      user.id,
+      year,
+    );
+    for (const [date, duration] of dataOfYear) {
+      mergedData.set(date, duration);
+    }
+  }
+
+  const overtimeData = buildOvertimeData(mergedData, startDate, endDate);
+
   currentOvertimeData = overtimeData;
-  lastFetchTime = Date.now();
 
   trayTitle = formatTrayTitle(overtimeData);
   if (tray) {
@@ -500,11 +462,14 @@ async function refreshTrayDataOnLaunch(): Promise<void> {
   const apiKey = loadStoredApiKey();
   if (!apiKey) return;
 
-  const year = new Date().getFullYear();
+  const startDate = overtimeStartDate || new Date().toISOString().split("T")[0];
+  const today = new Date();
+  const endDate = today.toISOString().split("T")[0];
+
   try {
-    await analyzeAndUpdateTray(apiKey, year);
+    await analyzeAndUpdateTray(apiKey, startDate, endDate);
     currentApiKey = apiKey;
-    currentYear = year;
+    currentYear = Number.parseInt(startDate.slice(0, 4), 10);
     startTrayUpdateIntervals();
   } catch (err) {
     console.error("Launch-time tray refresh failed:", err);
@@ -514,43 +479,26 @@ async function refreshTrayDataOnLaunch(): Promise<void> {
 function startTrayUpdateIntervals(): void {
   if (!trayEnabled || !currentApiKey) return;
 
-  // Clear existing intervals if any
   if (trayUpdateInterval) clearInterval(trayUpdateInterval);
-  if (trayDisplayInterval) clearInterval(trayDisplayInterval);
 
-  // Update tray data every 5 minutes
+  // Fetch fresh data every minute
   trayUpdateInterval = setInterval(async () => {
     if (!currentApiKey || !trayEnabled) return;
     try {
-      await analyzeAndUpdateTray(currentApiKey, currentYear);
+      const startDate =
+        overtimeStartDate || new Date().toISOString().split("T")[0];
+      const endDate = new Date().toISOString().split("T")[0];
+      await analyzeAndUpdateTray(currentApiKey, startDate, endDate);
     } catch (err) {
       console.error("Background tray update failed:", err);
     }
   }, FETCH_INTERVAL_MS);
-
-  // Update tray display (with interpolation) every second
-  trayDisplayInterval = setInterval(() => {
-    if (!tray || !trayEnabled) return;
-    const interpolatedData = getCurrentInterpolatedOvertimeData();
-    if (interpolatedData) {
-      const newTitle = formatTrayTitle(interpolatedData);
-      // Always update the tray to ensure smooth interpolation animation
-      if (newTitle !== trayTitle) {
-        trayTitle = newTitle;
-        tray.setTitle(trayTitle);
-      }
-    }
-  }, DISPLAY_UPDATE_INTERVAL_MS);
 }
 
 function stopTrayUpdateIntervals(): void {
   if (trayUpdateInterval) {
     clearInterval(trayUpdateInterval);
     trayUpdateInterval = null;
-  }
-  if (trayDisplayInterval) {
-    clearInterval(trayDisplayInterval);
-    trayDisplayInterval = null;
   }
 }
 
@@ -566,31 +514,23 @@ const rpc = BrowserView.defineRPC<AppRPC>({
       },
       analyzeOvertime: async ({
         apiKey,
-        year,
+        startDate,
+        endDate,
       }: {
         apiKey: string;
-        year: number;
+        startDate: string;
+        endDate: string;
       }) => {
-        const data = await analyzeAndUpdateTray(apiKey, year);
+        const data = await analyzeAndUpdateTray(apiKey, startDate, endDate);
         currentApiKey = apiKey;
-        currentYear = year;
+        currentYear = Number.parseInt(endDate.slice(0, 4), 10);
         // Start background update intervals when user successfully analyzes
         if (trayEnabled) {
           startTrayUpdateIntervals();
         }
         return data;
       },
-      getInterpolatedOvertimeData: async () => {
-        return (
-          getCurrentInterpolatedOvertimeData() ||
-          currentOvertimeData || {
-            year: currentYear,
-            totalOvertimeHours: 0,
-            totalOvertimeMinutes: 0,
-            dailyData: [],
-          }
-        );
-      },
+
       setLaunchAtLogin: async ({ enabled }: { enabled: boolean }) => {
         if (enabled) {
           await enableLaunchAtLogin();
@@ -603,6 +543,19 @@ const rpc = BrowserView.defineRPC<AppRPC>({
       },
       getTrayEnabled: async () => {
         return { enabled: trayEnabled };
+      },
+      setOvertimeStartDate: async ({ startDate }: { startDate?: string }) => {
+        console.log("[BUN] setOvertimeStartDate called with:", startDate);
+        overtimeStartDate = startDate || undefined;
+        persistPreferences({ trayEnabled, startDate: overtimeStartDate });
+        console.log("[BUN] overtimeStartDate updated to:", overtimeStartDate);
+      },
+      getOvertimeStartDate: async () => {
+        console.log(
+          "[BUN] getOvertimeStartDate called, returning:",
+          overtimeStartDate,
+        );
+        return { startDate: overtimeStartDate };
       },
       setStoredApiKey: async ({ apiKey }: { apiKey: string }) => {
         persistStoredApiKey(apiKey);

@@ -16,29 +16,46 @@ export interface OvertimeData {
 }
 
 /**
- * Build overtime data for a given year from time entries.
+ * Build overtime data for a date range from time entries.
  *
  * Calculates daily and cumulative overtime by comparing actual work hours
  * to expected 8-hour workdays (excluding weekends).
  *
- * @param year - The year to analyze
  * @param data - Map of date strings to Temporal.Duration of work hours
+ * @param startDate - Start date (YYYY-MM-DD) for overtime calculation
+ * @param endDate - End date (YYYY-MM-DD) for overtime calculation
  * @returns OvertimeData with daily breakdowns and totals
  */
 export function buildOvertimeData(
-  year: number,
   data: Map<string, Temporal.Duration>,
+  startDate: string,
+  endDate: string,
 ): OvertimeData {
   const dailyData: OvertimeData["dailyData"] = [];
   let expectedWorkDuration = Temporal.Duration.from({ hours: 0 });
   let actualWorkDuration = Temporal.Duration.from({ hours: 0 });
-  const today = Temporal.Now.plainDateISO();
+
+  // Parse start and end dates
+  let parsedStartDate: Temporal.PlainDate | null = null;
+  let parsedEndDate: Temporal.PlainDate | null = null;
+
+  try {
+    parsedStartDate = Temporal.PlainDate.from(startDate);
+    parsedEndDate = Temporal.PlainDate.from(endDate);
+  } catch {
+    throw new Error("Invalid date format, expected YYYY-MM-DD");
+  }
+
+  if (!parsedStartDate || !parsedEndDate) {
+    throw new Error("Invalid start or end date");
+  }
 
   for (let i = 0; ; i += 1) {
-    const day = Temporal.PlainDate.from({ year, month: 1, day: 1 }).add({
+    const day = parsedStartDate.add({
       days: i,
     });
-    if (Temporal.PlainDate.compare(day, today) > 0) {
+
+    if (Temporal.PlainDate.compare(day, parsedEndDate) > 0) {
       break;
     }
 
@@ -56,6 +73,21 @@ export function buildOvertimeData(
         date: day.toString(),
         actualHours: workDuration.hours + workDuration.minutes / 60,
         expectedHours,
+        cumulativeOvertimeHours:
+          cumulativeOvertime.hours + cumulativeOvertime.minutes / 60,
+      });
+    } else if (
+      (Temporal.PlainDate.compare(day, parsedStartDate) === 0 &&
+        dailyData.length === 0) ||
+      Temporal.PlainDate.compare(day, parsedEndDate) === 0
+    ) {
+      // Add anchor entry for start/end date even if no work, to ensure chart spans correct range
+      const cumulativeOvertime =
+        actualWorkDuration.subtract(expectedWorkDuration);
+      dailyData.push({
+        date: day.toString(),
+        actualHours: 0,
+        expectedHours: 0,
         cumulativeOvertimeHours:
           cumulativeOvertime.hours + cumulativeOvertime.minutes / 60,
       });

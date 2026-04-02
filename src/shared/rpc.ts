@@ -7,12 +7,9 @@ export type AppRPC = {
       analyzeOvertime: {
         params: {
           apiKey: string;
-          year: number;
+          startDate: string;
+          endDate: string;
         };
-        response: OvertimeData;
-      };
-      getInterpolatedOvertimeData: {
-        params: {};
         response: OvertimeData;
       };
       closeApp: {
@@ -30,6 +27,14 @@ export type AppRPC = {
       getTrayEnabled: {
         params: {};
         response: { enabled: boolean };
+      };
+      setOvertimeStartDate: {
+        params: { startDate?: string };
+        response: void;
+      };
+      getOvertimeStartDate: {
+        params: {};
+        response: { startDate?: string };
       };
       setStoredApiKey: {
         params: { apiKey: string };

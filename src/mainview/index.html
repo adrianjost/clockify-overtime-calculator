@@ -23,24 +23,23 @@
             &#x2715;
           </button>
         </div>
-        <form id="settings-form" class="settings-form">
+        <div class="settings-form">
           <div class="form-group">
             <label for="api-key">Clockify API Key</label>
             <input
               id="api-key"
               type="password"
-              required
               placeholder="e.g. AbCdEfGh12345678"
               autocomplete="off"
             />
             <p class="hint">
               Your API key is stored locally on this device and never shared.
             </p>
-          </div>
-          <div class="form-actions">
-            <button type="submit" class="btn-primary">Save API Key</button>
             <span id="save-status"></span>
           </div>
+        </div>
+
+        <div class="settings-section">
           <div
             class="form-group form-group--inline"
             id="launch-at-login-group"
@@ -57,7 +56,7 @@
             <label for="tray-enabled">Show menu bar item</label>
             <input type="checkbox" id="tray-enabled" />
           </div>
-        </form>
+        </div>
 
         <div class="onboarding-guide">
           <h2>How to get your API key</h2>
@@ -109,10 +108,17 @@
       >
         <div class="dashboard-header">
           <div>
-            <h1>
-              Overtime
-              <input id="year-select" type="number" min="1970" max="3000" />
-            </h1>
+            <h1>Overtime</h1>
+            <div class="date-range-controls">
+              <div class="form-group">
+                <label for="dashboard-start-date">From</label>
+                <input id="dashboard-start-date" type="date" />
+              </div>
+              <div class="form-group">
+                <label for="dashboard-end-date">To</label>
+                <input id="dashboard-end-date" type="date" />
+              </div>
+            </div>
             <div id="last-fetched" class="last-fetched">
               <span id="fetch-spinner" class="fetch-spinner" hidden></span>
             </div>

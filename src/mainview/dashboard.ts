@@ -14,7 +14,12 @@ export function initializeDashboard(
   electrobun: ElectrobunClient,
   onNavigateToSettings: () => void,
 ) {
-  const yearSelect = document.querySelector<HTMLInputElement>("#year-select");
+  const startDateInput = document.querySelector<HTMLInputElement>(
+    "#dashboard-start-date",
+  );
+  const endDateInput = document.querySelector<HTMLInputElement>(
+    "#dashboard-end-date",
+  );
   const lastFetchedEl = document.querySelector<HTMLDivElement>("#last-fetched");
   const fetchSpinner = document.querySelector<HTMLElement>("#fetch-spinner");
   const content = document.querySelector<HTMLDivElement>("#content");
@@ -23,52 +28,31 @@ export function initializeDashboard(
   let lastData: OvertimeData | null = null;
   let resizeRafId: number | null = null;
 
-  if (!yearSelect) {
-    throw new Error("Dashboard elements are missing");
+  if (!startDateInput || !endDateInput) {
+    throw new Error("Dashboard date elements are missing");
   }
 
-  // Load saved year from localStorage, default to current year
-  const savedYear = localStorage.getItem("clockify_viewed_year");
-  const defaultYear = new Date().getFullYear().toString();
-  yearSelect.value = savedYear || defaultYear;
+  // Initialize dates: start date from localStorage, end date defaults to end of start year
+  const today = new Date();
+
+  const savedStartDate = localStorage.getItem("clockify_viewed_start_date");
+  const startDateToUse = savedStartDate || `${today.getFullYear()}-01-01`;
+  startDateInput.value = startDateToUse;
+  endDateInput.value = computeDefaultEndDate();
+
+  function computeDefaultEndDate(): string {
+    return today.toISOString().split("T")[0];
+  }
 
   // Polling state — declared before runAnalysis so the closure can reference them
-  const POLL_INTERVAL_MS = 5 * 60 * 1000;
+  const POLL_INTERVAL_MS = 60 * 1000; // 1 minute
   const MIN_REFETCH_ON_VISIBILITY_MS = 60 * 1000;
-  const INTERPOLATION_UPDATE_MS = 1000; // Update display every 500ms for smooth animation
   let lastFetchTime = 0;
   let pollTimer: ReturnType<typeof setInterval> | null = null;
-  let interpolationTimer: ReturnType<typeof setInterval> | null = null;
 
   async function getStoredApiKey(): Promise<string> {
     const state = await electrobun.rpc.request.getStoredApiKey({});
     return (state?.apiKey ?? "").trim();
-  }
-
-  async function updateInterpolatedValue() {
-    try {
-      const interpolatedData =
-        await electrobun.rpc.request.getInterpolatedOvertimeData({});
-      if (interpolatedData) {
-        updateOvertimeDisplay(interpolatedData, overtimeValue);
-      }
-    } catch {
-      // Silently fail if unable to get interpolated value
-    }
-  }
-
-  function startInterpolationUpdates() {
-    if (interpolationTimer !== null) return;
-    interpolationTimer = setInterval(
-      updateInterpolatedValue,
-      INTERPOLATION_UPDATE_MS,
-    );
-  }
-
-  function stopInterpolationUpdates() {
-    if (interpolationTimer === null) return;
-    clearInterval(interpolationTimer);
-    interpolationTimer = null;
   }
 
   async function runAnalysis() {
@@ -78,8 +62,10 @@ export function initializeDashboard(
       return;
     }
 
-    const year = Number.parseInt(yearSelect!.value, 10);
-    if (Number.isNaN(year) || year < 1970 || year > 3000) {
+    const startDate = startDateInput!.value;
+    const endDate = endDateInput!.value;
+
+    if (!startDate || !endDate) {
       return;
     }
 
@@ -87,11 +73,18 @@ export function initializeDashboard(
     lastFetchTime = Date.now();
 
     try {
+      console.log("🔍 Analyzing overtime from:", startDate, "to:", endDate);
       const data = await electrobun.rpc.request.analyzeOvertime({
         apiKey,
-        year,
+        startDate,
+        endDate,
       });
       lastData = data;
+      console.log("📊 Analysis complete:", {
+        totalHours: data.totalOvertimeHours,
+        totalMinutes: data.totalOvertimeMinutes,
+        dayCount: data.dailyData.length,
+      });
       renderDashboard(data, overtimeValue, content);
       setLoading(false);
       if (lastFetchedEl) {
@@ -105,9 +98,20 @@ export function initializeDashboard(
     }
   }
 
-  yearSelect.addEventListener("change", () => {
-    localStorage.setItem("clockify_viewed_year", yearSelect.value);
-    focusRange = null; // Reset zoom when changing year
+  // Handle start date changes
+  startDateInput.addEventListener("change", () => {
+    localStorage.setItem("clockify_viewed_start_date", startDateInput.value);
+    // Only reset end date if it's before the new start date
+    if (!endDateInput.value || endDateInput.value < startDateInput.value) {
+      endDateInput.value = computeDefaultEndDate();
+    }
+    focusRange = null; // Reset zoom when changing date range
+    runAnalysis();
+  });
+
+  // Handle end date changes
+  endDateInput.addEventListener("change", () => {
+    focusRange = null; // Reset zoom when changing date range
     runAnalysis();
   });
 
@@ -137,16 +141,13 @@ export function initializeDashboard(
         fetchIfApiKeyPresent();
       }
       startPolling();
-      startInterpolationUpdates();
     } else {
       stopPolling();
-      stopInterpolationUpdates();
     }
   });
 
   if (document.visibilityState === "visible") {
     startPolling();
-    startInterpolationUpdates();
   }
 
   window.addEventListener("resize", () => {
@@ -208,9 +209,9 @@ function updateOvertimeDisplay(
 ) {
   if (!overtimeValue) return;
 
-  // Update overtime value
   const sign = data.totalOvertimeHours >= 0 ? "+" : "";
-  overtimeValue.textContent = `${sign}${data.totalOvertimeHours}h ${data.totalOvertimeMinutes}min`;
+  const displayText = `${sign}${data.totalOvertimeHours}h ${data.totalOvertimeMinutes}min`;
+  overtimeValue.textContent = displayText;
   if (data.totalOvertimeHours < 0) {
     overtimeValue.style.color = "#b42318";
   } else {
@@ -961,16 +962,11 @@ function fillMissingDays(
 
   const firstEntry = sorted[0];
   const lastEntry = sorted[sorted.length - 1];
-  const firstYear = Number.parseInt(firstEntry.date.slice(0, 4), 10);
 
-  // Start at Jan 1 for the selected year so non-worked days are visible.
-  const start = new Date(firstYear, 0, 1);
+  // Start from the first actual data entry, not from Jan 1
+  // This respects custom start dates
+  const start = new Date(firstEntry.date);
   const end = new Date(lastEntry.date);
-
-  const today = new Date();
-  if (today.getFullYear() === firstYear && today > end) {
-    end.setTime(today.getTime());
-  }
 
   const result: OvertimeData["dailyData"] = [];
   let lastCumulativeOvertime = 0;
