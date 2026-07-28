@@ -396,7 +396,8 @@ async function analyzeAndUpdateTray(
 
   const user = await fetchActiveUser(trimmedApiKey);
 
-  // Fetch all years covered by the date range and merge into one map
+  // Fetch all years covered by the date range and merge into one map.
+  // Doing the fetch sequentially to avoid rate limiting.
   const mergedData = new Map<string, Temporal.Duration>();
   for (let year = startYear; year <= endYear; year++) {
     const dataOfYear = await fetchYear(trimmedApiKey, user.defaultWorkspace, user.id, year);
@@ -526,6 +527,7 @@ const rpc = BrowserView.defineRPC<AppRPC>({
     },
     messages: {},
   },
+  maxRequestTime: 60000, // 60 seconds for long-running API calls
 });
 
 ApplicationMenu.setApplicationMenu([

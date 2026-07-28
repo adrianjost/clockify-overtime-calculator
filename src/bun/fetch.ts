@@ -1,19 +1,30 @@
 const FETCH_MAX_RETRIES = 3;
 const FETCH_RETRY_DELAY_MS = 1000;
+const FETCH_REQUEST_TIMEOUT_MS = 15000; // 15 seconds per request
 
 export const fetchWithRetry = async (url: string, options: RequestInit): Promise<Response> => {
   let response: Response | undefined;
 
   for (let attempt = 0; attempt < FETCH_MAX_RETRIES; attempt += 1) {
     try {
-      response = await fetch(url, options);
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutHandle = setTimeout(() => controller.abort(), FETCH_REQUEST_TIMEOUT_MS);
+
+      response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutHandle);
+
       if (response.ok) {
         return response;
       }
     } catch (err) {
       if (attempt < FETCH_MAX_RETRIES - 1) {
-        // Log retries but not the last failure, as it will throw below
-        console.warn(`Fetch attempt ${attempt + 1} failed, retrying...`, err);
+        // Retry on failure
+      } else {
+        throw err;
       }
     }
 

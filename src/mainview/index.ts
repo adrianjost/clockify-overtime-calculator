@@ -11,6 +11,7 @@ const rpc = Electroview.defineRPC<AppRPC>({
     requests: {},
     messages: {},
   },
+  maxRequestTime: 60000, // 60 seconds for long-running API calls
 });
 
 // Create Electroview instance with the RPC definition
