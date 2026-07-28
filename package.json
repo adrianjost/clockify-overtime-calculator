@@ -10,7 +10,7 @@
     "generate-icons": "bun scripts/generate-icons.ts"
   },
   "dependencies": {
-    "electrobun": "^1.16.0",
+    "electrobun": "^1.18.1",
     "temporal-polyfill": "^0.2.5"
   },
   "devDependencies": {
