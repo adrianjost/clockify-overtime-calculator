@@ -10,7 +10,7 @@ import {
 import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildOvertimeData } from "./report.ts";
-import { getDurationPerDay } from "./time-entry-store.ts";
+import { configureCacheFile, getDurationPerDay } from "./time-entry-store.ts";
 import type { AppRPC } from "../shared/rpc.ts";
 import type { OvertimeData } from "./report.ts";
 
@@ -26,6 +26,7 @@ const WINDOW_STATE_DIR = join(HOME, ".clockify-overtime");
 const WINDOW_STATE_FILE = join(WINDOW_STATE_DIR, "window-state.json");
 const PREFERENCES_FILE = join(WINDOW_STATE_DIR, "preferences.json");
 const AT_LOGIN_SENTINEL = join(WINDOW_STATE_DIR, "at-login");
+const TIME_ENTRY_CACHE_FILE = join(WINDOW_STATE_DIR, "time-entries-cache.json");
 const KEYCHAIN_SERVICE = "dev.adrianjost.clockify-overtime";
 const KEYCHAIN_ACCOUNT = "clockify-api-key";
 
@@ -37,6 +38,8 @@ const SENTINEL_FILE_FRESHNESS_MS = 30_000; // 30 seconds
 const FETCH_INTERVAL_MS = 60 * 1000; // 1 minute
 const WINDOW_CLAMP_DEBOUNCE_MS = 120; // 120ms
 const WINDOW_PERSIST_DEBOUNCE_MS = 200; // 200ms
+
+configureCacheFile(TIME_ENTRY_CACHE_FILE);
 
 // ─── Startup detection ────────────────────────────────────────────────────────
 // The LaunchAgent creates the sentinel file right before opening the app.

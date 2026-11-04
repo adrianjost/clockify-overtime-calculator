@@ -1,8 +1,10 @@
 const FETCH_MAX_ATTEMPTS = 3;
 const FETCH_RETRY_BASE_DELAY_MS = 2000; // 2s, 4s, ... (exponential)
 const FETCH_REQUEST_TIMEOUT_MS = 15000; // 15 seconds per request
-const RATE_LIMIT_MIN_COOLDOWN_MS = 60 * 1000; // pause all requests for at least 1 minute after a 429
-const RATE_LIMIT_MAX_COOLDOWN_MS = 10 * 60 * 1000;
+// Free Clockify workspaces are limited to 30 requests per hour, so after a 429
+// we pause all requests for a while instead of retrying (retries burn quota).
+const RATE_LIMIT_MIN_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+const RATE_LIMIT_MAX_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
 
 /**
  * Thrown when the API told us to slow down (HTTP 429) or while we are still
@@ -42,8 +44,8 @@ const isRetryableStatus = (status: number) => status === 429 || status >= 500;
  *
  * - Client errors (4xx except 429) are returned immediately so callers can
  *   surface the error message — retrying them only burns API quota.
- * - 429 responses honor Retry-After and, if still limited after the last
- *   attempt, put all further requests on hold for a cooldown period.
+ * - 429 responses are not retried; instead all further requests are put on
+ *   hold for a cooldown period (honoring Retry-After).
  * - 5xx and network errors are retried with exponential backoff.
  */
 export const fetchWithRetry = async (url: string, options: RequestInit): Promise<Response> => {
@@ -55,7 +57,7 @@ export const fetchWithRetry = async (url: string, options: RequestInit): Promise
 
   for (let attempt = 0; attempt < FETCH_MAX_ATTEMPTS; attempt += 1) {
     const isLastAttempt = attempt === FETCH_MAX_ATTEMPTS - 1;
-    let retryDelay = FETCH_RETRY_BASE_DELAY_MS * 2 ** attempt;
+    const retryDelay = FETCH_RETRY_BASE_DELAY_MS * 2 ** attempt;
 
     const controller = new AbortController();
     const timeoutHandle = setTimeout(() => controller.abort(), FETCH_REQUEST_TIMEOUT_MS);
@@ -67,19 +69,14 @@ export const fetchWithRetry = async (url: string, options: RequestInit): Promise
       }
 
       if (response.status === 429) {
-        const retryAfter = parseRetryAfter(response);
-        if (isLastAttempt) {
-          const cooldown = Math.min(
-            Math.max(retryAfter ?? 0, RATE_LIMIT_MIN_COOLDOWN_MS),
-            RATE_LIMIT_MAX_COOLDOWN_MS,
-          );
-          rateLimitedUntil = Date.now() + cooldown;
-          throw new RateLimitError(rateLimitedUntil);
-        }
-        if (retryAfter !== null) {
-          retryDelay = Math.min(retryAfter, RATE_LIMIT_MAX_COOLDOWN_MS);
-        }
-      } else if (isLastAttempt) {
+        const cooldown = Math.min(
+          Math.max(parseRetryAfter(response) ?? 0, RATE_LIMIT_MIN_COOLDOWN_MS),
+          RATE_LIMIT_MAX_COOLDOWN_MS,
+        );
+        rateLimitedUntil = Date.now() + cooldown;
+        throw new RateLimitError(rateLimitedUntil);
+      }
+      if (isLastAttempt) {
         return response;
       }
       lastError = new Error(`HTTP ${response.status} ${response.statusText}`);
