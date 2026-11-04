@@ -21,6 +21,8 @@ import {
  *   again every FULL_REFRESH_INTERVAL_MS to pick up edits to old entries.
  * - The last RECENT_WINDOW_DAYS days are refetched on app start and then once
  *   every RECENT_REFRESH_INTERVAL_MS (a single request / page).
+ * - The last LIVE_WINDOW_DAYS days are refetched every LIVE_REFRESH_INTERVAL_MS
+ *   so starting/stopping the timer shows up in the tray (12 requests / hour).
  * - Widening the range into the past only fetches the newly added days.
  * - Polling in between is served from the cache. Running timers are computed
  *   locally, so the tray counter keeps ticking without API calls.
@@ -32,6 +34,10 @@ import {
 const RECENT_WINDOW_DAYS = 14;
 /** Time between two refreshes of the recent window (also done on app start). */
 const RECENT_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
+/** Number of days (including today) refetched frequently to catch timer start/stop. */
+const LIVE_WINDOW_DAYS = 2; // today + yesterday, for timers running past midnight
+/** Time between two refreshes of the live window. Free workspaces allow 30 requests/hour. */
+const LIVE_REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 /** Interval after which the whole cached range is refetched. */
 const FULL_REFRESH_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000; // weekly
 
@@ -45,6 +51,7 @@ type CacheState = {
   entries: Map<string, TimeEntry>;
   covered: DateRange | null;
   lastRecentRefresh: number;
+  lastLiveRefresh: number;
   lastFullRefresh: number;
 };
 
@@ -93,6 +100,7 @@ const emptyState = (apiKey: string): CacheState => ({
   entries: new Map(),
   covered: null,
   lastRecentRefresh: 0,
+  lastLiveRefresh: 0,
   lastFullRefresh: 0,
 });
 
@@ -110,6 +118,7 @@ function loadState(apiKey: string): CacheState {
       covered: persisted.covered,
       // Not persisted on purpose: refresh the recent days once per app start.
       lastRecentRefresh: 0,
+      lastLiveRefresh: 0,
       lastFullRefresh: persisted.lastFullRefresh,
     };
   } catch {
@@ -184,6 +193,7 @@ async function refresh(cache: CacheState, range: DateRange): Promise<boolean> {
     cache.covered = full;
     cache.lastFullRefresh = now;
     cache.lastRecentRefresh = now;
+    cache.lastLiveRefresh = now;
     return true;
   }
 
@@ -198,35 +208,40 @@ async function refresh(cache: CacheState, range: DateRange): Promise<boolean> {
   }
 
   const recentStart = maxDate(cache.covered.start, addDays(today(), -(RECENT_WINDOW_DAYS - 1)));
+  const liveStart = maxDate(cache.covered.start, addDays(today(), -(LIVE_WINDOW_DAYS - 1)));
   const isRecentDue = now - cache.lastRecentRefresh >= RECENT_REFRESH_INTERVAL_MS;
+  const isLiveDue = isRecentDue || now - cache.lastLiveRefresh >= LIVE_REFRESH_INTERVAL_MS;
+  const refreshStart = isRecentDue ? recentStart : liveStart;
 
   if (range.end > cache.covered.end) {
     const gapStart = addDays(cache.covered.end, 1);
-    const lastFetchDate = cache.lastRecentRefresh > 0 ? utcDateOf(cache.lastRecentRefresh) : "";
-    if (cache.covered.end >= lastFetchDate && !isRecentDue) {
+    const lastFetchDate = cache.lastLiveRefresh > 0 ? utcDateOf(cache.lastLiveRefresh) : "";
+    if (cache.covered.end >= lastFetchDate && !isLiveDue) {
       // The missing days (e.g. after midnight) were in the future when we last
       // fetched, so they were empty then. They get picked up with the next
-      // scheduled refresh of the recent window — no extra request needed.
+      // scheduled refresh of the live window — no extra request needed.
       cache.covered.end = range.end;
-    } else if (gapStart < recentStart) {
-      // Gap reaches outside the recent window: fetch it explicitly.
+    } else if (gapStart < refreshStart) {
+      // Gap reaches outside the window refreshed below: fetch it explicitly.
       const missing = { start: gapStart, end: fetchEnd };
       replaceRange(cache, missing, await fetchRange(cache, missing));
       cache.covered.end = fetchEnd;
       fetched = true;
     } else {
-      // Gap is inside the recent window: covered by the refresh below.
+      // Gap is inside the window refreshed below.
       cache.covered.end = fetchEnd;
     }
   }
 
-  // Refresh the recent days where entries are typically added or edited.
-  if (isRecentDue) {
+  // Refresh the live window (every few minutes) or the larger recent window
+  // (on start and daily), where entries are typically added or edited.
+  if (isLiveDue) {
     const end = maxDate(cache.covered.end, today());
-    const recent = { start: minDate(recentStart, end), end };
-    replaceRange(cache, recent, await fetchRange(cache, recent));
+    const refreshWindow = { start: minDate(refreshStart, end), end };
+    replaceRange(cache, refreshWindow, await fetchRange(cache, refreshWindow));
     cache.covered.end = end;
-    cache.lastRecentRefresh = now;
+    cache.lastLiveRefresh = now;
+    if (isRecentDue) cache.lastRecentRefresh = now;
     fetched = true;
   }
 
