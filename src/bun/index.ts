@@ -9,8 +9,8 @@ import {
 } from "electrobun/bun";
 import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { fetchActiveUser, fetchYear } from "./clockify.ts";
 import { buildOvertimeData } from "./report.ts";
+import { configureCacheFile, getDurationPerDay } from "./time-entry-store.ts";
 import type { AppRPC } from "../shared/rpc.ts";
 import type { OvertimeData } from "./report.ts";
 
@@ -26,6 +26,7 @@ const WINDOW_STATE_DIR = join(HOME, ".clockify-overtime");
 const WINDOW_STATE_FILE = join(WINDOW_STATE_DIR, "window-state.json");
 const PREFERENCES_FILE = join(WINDOW_STATE_DIR, "preferences.json");
 const AT_LOGIN_SENTINEL = join(WINDOW_STATE_DIR, "at-login");
+const TIME_ENTRY_CACHE_FILE = join(WINDOW_STATE_DIR, "time-entries-cache.json");
 const KEYCHAIN_SERVICE = "dev.adrianjost.clockify-overtime";
 const KEYCHAIN_ACCOUNT = "clockify-api-key";
 
@@ -37,6 +38,8 @@ const SENTINEL_FILE_FRESHNESS_MS = 30_000; // 30 seconds
 const FETCH_INTERVAL_MS = 60 * 1000; // 1 minute
 const WINDOW_CLAMP_DEBOUNCE_MS = 120; // 120ms
 const WINDOW_PERSIST_DEBOUNCE_MS = 200; // 200ms
+
+configureCacheFile(TIME_ENTRY_CACHE_FILE);
 
 // ─── Startup detection ────────────────────────────────────────────────────────
 // The LaunchAgent creates the sentinel file right before opening the app.
@@ -392,21 +395,11 @@ async function analyzeAndUpdateTray(
     throw new Error("Please provide valid start and end dates.");
   }
 
-  persistStoredApiKey(trimmedApiKey);
+  // Served from a shared cache: only recent days are refetched from Clockify,
+  // and concurrent tray/dashboard refreshes share a single request.
+  const durationPerDay = await getDurationPerDay(trimmedApiKey, startDate, endDate);
 
-  const user = await fetchActiveUser(trimmedApiKey);
-
-  // Fetch all years covered by the date range and merge into one map.
-  // Doing the fetch sequentially to avoid rate limiting.
-  const mergedData = new Map<string, Temporal.Duration>();
-  for (let year = startYear; year <= endYear; year++) {
-    const dataOfYear = await fetchYear(trimmedApiKey, user.defaultWorkspace, user.id, year);
-    for (const [date, duration] of dataOfYear) {
-      mergedData.set(date, duration);
-    }
-  }
-
-  const overtimeData = buildOvertimeData(mergedData, startDate, endDate);
+  const overtimeData = buildOvertimeData(durationPerDay, startDate, endDate);
 
   currentOvertimeData = overtimeData;
 
@@ -481,7 +474,11 @@ const rpc = BrowserView.defineRPC<AppRPC>({
         endDate: string;
       }) => {
         const data = await analyzeAndUpdateTray(apiKey, startDate, endDate);
-        currentApiKey = apiKey;
+        // Only touch the Keychain when the key actually changed.
+        if (apiKey.trim() !== currentApiKey) {
+          persistStoredApiKey(apiKey);
+        }
+        currentApiKey = apiKey.trim();
         // Sync UI's start date back to tray preferences so background interval uses same range
         overtimeStartDate = startDate;
         persistPreferences({ trayEnabled, startDate: overtimeStartDate });

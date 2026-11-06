@@ -4,12 +4,13 @@ import { fetchWithRetry } from "./fetch.ts";
 const CLOCKIFY_API_BASE = "https://api.clockify.me/api/v1";
 const TIME_ENTRIES_PAGE_SIZE = 5000;
 
-type ActiveUser = {
+export type ActiveUser = {
   id: string;
   defaultWorkspace: string;
 };
 
-type TimeEntry = {
+export type TimeEntry = {
+  id: string;
   timeInterval: {
     start: string;
     duration: string | null;
@@ -93,45 +94,25 @@ export const fetchTimeEntries = async (
 };
 
 /**
- * Fetch and aggregate work hours for each day in a given year.
+ * The (UTC) calendar day an entry is attributed to, as YYYY-MM-DD.
+ */
+export const entryDate = (entry: TimeEntry): string => entry.timeInterval.start.slice(0, 10);
+
+/**
+ * Aggregate time entries into work hours per day.
  *
  * Handles running timers (unclosed entries) by calculating elapsed time
- * from the start until now.
+ * from the start until now, so the result stays current without refetching.
  *
- * @param apiKey - The Clockify API key
- * @param workspaceID - The workspace ID
- * @param userID - The user ID
- * @param year - The year to fetch data for
- * @returns Promise<Map<string, Temporal.Duration>> mapping date strings to work hours
- * @throws Error if any API request fails
+ * @param timeEntries - Time entries to aggregate
+ * @returns Map<string, Temporal.Duration> mapping date strings to work hours
  */
-export const fetchYear = async (
-  apiKey: string,
-  workspaceID: string,
-  userID: string,
-  year: number,
-): Promise<Map<string, Temporal.Duration>> => {
-  const firstDayOfYear = Temporal.PlainDate.from({
-    year,
-    month: 1,
-    day: 1,
-  });
-  const lastDayOfYear = Temporal.PlainDate.from({
-    year,
-    month: 12,
-    day: 31,
-  });
-  const timeEntries = await fetchTimeEntries(
-    apiKey,
-    workspaceID,
-    userID,
-    firstDayOfYear,
-    lastDayOfYear,
-  );
-
+export const aggregateDurationPerDay = (
+  timeEntries: Iterable<TimeEntry>,
+): Map<string, Temporal.Duration> => {
   const durationPerDay = new Map<string, Temporal.Duration>();
   for (const entry of timeEntries) {
-    const date = Temporal.PlainDate.from(entry.timeInterval.start.slice(0, 10));
+    const date = entryDate(entry);
     let duration: Temporal.Duration;
     if (entry.timeInterval.duration === null) {
       const start = Temporal.Instant.from(entry.timeInterval.start);
@@ -140,9 +121,8 @@ export const fetchYear = async (
     } else {
       duration = Temporal.Duration.from(entry.timeInterval.duration);
     }
-    const currentDuration =
-      durationPerDay.get(date.toString()) || Temporal.Duration.from({ seconds: 0 });
-    durationPerDay.set(date.toString(), currentDuration.add(duration));
+    const currentDuration = durationPerDay.get(date) || Temporal.Duration.from({ seconds: 0 });
+    durationPerDay.set(date, currentDuration.add(duration));
   }
   return durationPerDay;
 };
