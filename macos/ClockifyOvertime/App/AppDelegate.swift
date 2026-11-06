@@ -15,7 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   func applicationWillFinishLaunching(_ notification: Notification) {
     launchedAtLogin = LaunchAtLogin.wasLaunchedAsLoginItem()
     NSApp.setActivationPolicy(.accessory)
-    NSApp.mainMenu = Self.buildMainMenu()
+    NSApp.mainMenu = buildMainMenu()
   }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
@@ -31,10 +31,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     return false
   }
 
-  private static func buildMainMenu() -> NSMenu {
+  @objc private func openSettings() {
+    controller.openSettings()
+  }
+
+  private func buildMainMenu() -> NSMenu {
     let mainMenu = NSMenu()
 
     let appMenu = NSMenu()
+    let settings = NSMenuItem(
+      title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+    settings.target = self
+    appMenu.addItem(settings)
+    appMenu.addItem(.separator())
     appMenu.addItem(
       NSMenuItem(
         title: "Hide Clockify Overtime", action: #selector(NSApplication.hide(_:)),
@@ -44,7 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       NSMenuItem(
         title: "Quit Clockify Overtime", action: #selector(NSApplication.terminate(_:)),
         keyEquivalent: "q"))
-    mainMenu.addItem(submenuItem(appMenu))
+    mainMenu.addItem(Self.submenuItem(appMenu))
 
     let editMenu = NSMenu(title: "Edit")
     editMenu.addItem(NSMenuItem(title: "Undo", action: Selector(("undo:")), keyEquivalent: "z"))
@@ -59,7 +68,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
     editMenu.addItem(
       NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
-    mainMenu.addItem(submenuItem(editMenu))
+    mainMenu.addItem(Self.submenuItem(editMenu))
 
     let windowMenu = NSMenu(title: "Window")
     windowMenu.addItem(
@@ -67,7 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         title: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m"))
     windowMenu.addItem(
       NSMenuItem(title: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w"))
-    mainMenu.addItem(submenuItem(windowMenu))
+    mainMenu.addItem(Self.submenuItem(windowMenu))
     NSApp.windowsMenu = windowMenu
 
     return mainMenu

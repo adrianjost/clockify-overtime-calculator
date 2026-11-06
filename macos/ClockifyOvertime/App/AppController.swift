@@ -38,6 +38,11 @@ final class AppController {
     NSApp.activate(ignoringOtherApps: true)
   }
 
+  func openSettings() {
+    openMainWindow()
+    mainWindow?.showSettings()
+  }
+
   /// Keep running in the menu bar after the window closes; quit when there is no menu bar item.
   var shouldTerminateAfterLastWindowClosed: Bool { !preferences.trayEnabled }
 
@@ -59,6 +64,11 @@ final class AppController {
       return try json(data)
     case "closeApp":
       mainWindow?.close()
+      return nil
+    case "setContentMaxHeight":
+      if let height = params["height"] as? Double {
+        mainWindow?.setPageMaxHeight(height)
+      }
       return nil
     case "getLaunchAtLogin":
       return try json(["enabled": LaunchAtLogin.isEnabled])

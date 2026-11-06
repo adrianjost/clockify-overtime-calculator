@@ -8,6 +8,7 @@ final class MainWindowController: NSObject, NSWindowDelegate, WKScriptMessageHan
   typealias RequestHandler = (_ method: String, _ params: [String: Any]) async throws -> String?
 
   private static let minSize = NSSize(width: 400, height: 450)
+  private static let defaultSize = NSSize(width: 720, height: 560)
   private static let screenMargin: CGFloat = 24
   private static let frameAutosaveName = "MainWindow"
 
@@ -22,21 +23,41 @@ final class MainWindowController: NSObject, NSWindowDelegate, WKScriptMessageHan
 
     let configuration = WKWebViewConfiguration()
     configuration.setURLSchemeHandler(BundledWebHandler(), forURLScheme: BundledWebHandler.scheme)
+    configuration.userContentController.addUserScript(Self.accentColorScript())
     webView = WKWebView(frame: .zero, configuration: configuration)
+    webView.setValue(false, forKey: "drawsBackground")
+    webView.underPageBackgroundColor = .clear
     #if DEBUG
       webView.isInspectable = true
     #endif
 
     window = NSWindow(
-      contentRect: NSRect(origin: .zero, size: Self.minSize),
-      styleMask: [.titled, .closable, .miniaturizable, .resizable],
+      contentRect: NSRect(origin: .zero, size: Self.defaultSize),
+      styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
       backing: .buffered,
       defer: false
     )
     window.title = "Clockify Overtime"
+    window.titleVisibility = .hidden
+    window.titlebarAppearsTransparent = true
     window.minSize = Self.minSize
     window.isReleasedWhenClosed = false
-    window.contentView = webView
+
+    // Native window material behind the (transparent) page; the page starts below
+    // the title bar so the window stays draggable there.
+    let background = NSVisualEffectView()
+    background.material = .windowBackground
+    background.blendingMode = .behindWindow
+    background.state = .followsWindowActiveState
+    window.contentView = background
+    webView.translatesAutoresizingMaskIntoConstraints = false
+    background.addSubview(webView)
+    NSLayoutConstraint.activate([
+      webView.topAnchor.constraint(equalTo: (window.contentLayoutGuide as! NSLayoutGuide).topAnchor),
+      webView.leadingAnchor.constraint(equalTo: background.leadingAnchor),
+      webView.trailingAnchor.constraint(equalTo: background.trailingAnchor),
+      webView.bottomAnchor.constraint(equalTo: background.bottomAnchor),
+    ])
 
     super.init()
 
@@ -59,6 +80,45 @@ final class MainWindowController: NSObject, NSWindowDelegate, WKScriptMessageHan
 
   func close() {
     window.performClose(nil)
+  }
+
+  /// Caps the window so the page never gets taller than its content can use.
+  func setPageMaxHeight(_ pageHeight: Double) {
+    let contentHeight = window.contentView?.frame.height ?? 0
+    let titlebarInset = contentHeight - webView.frame.height
+    let maxHeight = max(Self.minSize.height, CGFloat(pageHeight) + titlebarInset)
+    window.contentMaxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: maxHeight)
+    if contentHeight > maxHeight + 0.5 {
+      var frame = window.frame
+      let shrink = contentHeight - maxHeight
+      frame.size.height -= shrink
+      frame.origin.y += shrink
+      window.setFrame(frame, display: true, animate: false)
+    }
+  }
+
+  func showSettings() {
+    webView.evaluateJavaScript("location.hash = '#settings'")
+  }
+
+  /// Exposes the system accent color to CSS for light and dark appearance.
+  private static func accentColorScript() -> WKUserScript {
+    func hex(_ appearance: NSAppearance.Name) -> String {
+      var result = "#007aff"
+      NSAppearance(named: appearance)?.performAsCurrentDrawingAppearance {
+        if let color = NSColor.controlAccentColor.usingColorSpace(.sRGB) {
+          result = String(
+            format: "#%02x%02x%02x", Int(color.redComponent * 255),
+            Int(color.greenComponent * 255), Int(color.blueComponent * 255))
+        }
+      }
+      return result
+    }
+    let source = """
+      document.documentElement.style.setProperty('--accent-light', '\(hex(.aqua))');
+      document.documentElement.style.setProperty('--accent-dark', '\(hex(.darkAqua))');
+      """
+    return WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true)
   }
 
   func windowWillClose(_ notification: Notification) {
