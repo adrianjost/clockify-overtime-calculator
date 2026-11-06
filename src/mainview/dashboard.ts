@@ -1,19 +1,14 @@
-import type { Electroview } from "electrobun/view";
-import type { OvertimeData } from "../bun/report.ts";
-import type { AppRPC } from "../shared/rpc.ts";
+import type { OvertimeData } from "../shared/rpc.ts";
+import { bridge } from "./bridge.ts";
 
 type CumulativeMode = "daily" | "weekly";
-type ElectrobunClient = Electroview<AppRPC>;
 
 // Zoom/pan state — indices into lastFilledData. null = full range.
 let focusRange: { start: number; end: number } | null = null;
 // Cached full dataset so interaction handlers can compute zoomed slices.
 let lastFilledData: OvertimeData["dailyData"] = [];
 
-export function initializeDashboard(
-  electrobun: ElectrobunClient,
-  onNavigateToSettings: () => void,
-) {
+export function initializeDashboard(onNavigateToSettings: () => void) {
   const startDateInput = document.querySelector<HTMLInputElement>("#dashboard-start-date");
   const endDateInput = document.querySelector<HTMLInputElement>("#dashboard-end-date");
   const lastFetchedEl = document.querySelector<HTMLDivElement>("#last-fetched");
@@ -46,7 +41,7 @@ export function initializeDashboard(
   let pollTimer: ReturnType<typeof setInterval> | null = null;
 
   async function getStoredApiKey(): Promise<string> {
-    const state = await electrobun.rpc.request.getStoredApiKey({});
+    const state = await bridge.getStoredApiKey({});
     return (state?.apiKey ?? "").trim();
   }
 
@@ -69,7 +64,7 @@ export function initializeDashboard(
 
     try {
       console.log("🔍 Analyzing overtime from:", startDate, "to:", endDate);
-      const data = await electrobun.rpc.request.analyzeOvertime({
+      const data = await bridge.analyzeOvertime({
         apiKey,
         startDate,
         endDate,

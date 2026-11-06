@@ -1,103 +1,87 @@
 # Clockify Overtime Desktop App
 
-Native macOS desktop app built with Electrobun.
+Native macOS menu bar app that shows your Clockify overtime.
 
 ## Features
 
-- Enter your Clockify API key in-app
+- Enter your Clockify API key in-app (stored in the macOS Keychain)
 - Analyze overtime for a custom date range
-- View overtime and daily chart data in the desktop UI
-- Keep a tray icon with periodic overtime updates
+- Zoomable daily/weekly chart with cumulative overtime
+- Menu bar item with periodic overtime updates
+- Launch at login
+
+## How it works
+
+- `macos/`: the native app (Swift, AppKit). It owns the menu bar item, the window, the Keychain,
+  launch at login, and fetching/caching Clockify time entries (`macos/ClockifyOvertime/Clockify`).
+- `src/mainview/`: the dashboard UI (HTML/CSS/TypeScript), shown in a `WKWebView`. It talks to the
+  native app through `src/mainview/bridge.ts`; the available requests are typed in `src/shared/rpc.ts`.
+
+The Xcode build bundles the web UI with Bun (`scripts/build-web.sh`), so the app has no runtime
+dependencies.
+
+App data lives in `~/.clockify-overtime/` (preferences and a time entry cache).
 
 ## Prerequisites
 
-1. Install Bun (official instructions): https://bun.sh/docs/installation
-2. Verify Bun is available:
-   bun --version
-3. Install an SVG conversion tool for icon generation:
-   - macOS (Homebrew): brew install imagemagick
-   - Alternative: brew install librsvg
+- macOS 14 or later
+- Xcode (the full app from the App Store; the Command Line Tools alone are not enough)
+- Bun: https://bun.sh/docs/installation
+- For regenerating icons: `brew install librsvg` (or ImageMagick)
 
 ## Setup
 
-1. Install dependencies:
-   bun install
+```sh
+bun run setup
+```
 
-2. Install pre-commit hooks:
-   bash scripts/setup-hooks.sh
-
-   This configures local git hooks from `.githooks/`.
-
-3. Generate app icons (required before packaging):
-   bun run generate-icons
-
-Optional one-command setup:
-
-- bun run setup
+This installs dev dependencies and the pre-commit hook (formatting via oxfmt).
 
 ## Run (Development)
 
-1. Start app in dev mode:
-   bun start
+Open `macos/ClockifyOvertime.xcodeproj` in Xcode and press Run.
 
-2. In the app window:
-   - Paste your Clockify API key
-   - Pick a start and end date
-   - Click Analyze
-
-Optional watch mode:
-
-- bun run dev
+Debug builds enable the Web Inspector for the dashboard (Safari → Develop menu).
 
 ## Build
 
-Build a distributable app bundle:
+```sh
+bun run build
+```
 
-- bunx electrobun build
+The app is written to `build/DerivedData/Build/Products/Release/Clockify Overtime.app`.
 
-Build output is written to `build/`.
+Other commands:
 
-## Distribution on Other Macs (Important)
+- `bun run typecheck`: type-check the web UI
+- `bun run format`: format source
+- `bun run generate-icons`: regenerate the app icon from `icon-source.svg`
 
-If the app works on your machine but shows "is damaged" or "is broken" on another Mac, it is usually a Gatekeeper issue.
-Unsigned or ad-hoc signed apps can run locally but are blocked when downloaded/copied to another device.
+## Install
 
-### 1. Sign the app with Developer ID
+There are no prebuilt downloads, so build the app yourself (see Prerequisites and Build), then:
 
-Use a real Developer ID Application certificate (not ad-hoc):
+1. Move `Clockify Overtime.app` from `build/DerivedData/Build/Products/Release/` to `/Applications`.
+2. Open it. On first launch it shows the settings.
+3. Create a Clockify API key: in Clockify, open your profile menu → Preferences → Advanced →
+   Manage API keys → Generate new, and copy the key (it is only shown once).
+4. Paste the key into the Clockify API Key field. It is stored in the Keychain.
+5. Close the settings. The dashboard shows your overtime from the start of the year (change it
+   with From/To), and the menu bar shows the total. Enable Launch at login in the settings if
+   you like.
 
-- APP="build/stable-macos-arm64/clockify-overtime.app"
-- IDENTITY="Developer ID Application: Your Name (TEAMID)"
-- codesign --force --deep --options runtime --timestamp --sign "$IDENTITY" "$APP"
-- codesign --verify --deep --strict --verbose=2 "$APP"
-- spctl -a -vv "$APP"
+To update, pull the latest changes, build again and replace the app in `/Applications`.
 
-### 2. Notarize and staple
+## Signing and distribution
 
-- ditto -c -k --sequesterRsrc --keepParent "$APP" "clockify-overtime-macos.zip"
-- xcrun notarytool submit "clockify-overtime-macos.zip" --apple-id "YOUR_APPLE_ID" --team-id "TEAMID" --password "APP_SPECIFIC_PASSWORD" --wait
-- xcrun stapler staple "$APP"
-- spctl -a -vv "$APP"
+Local builds are ad-hoc signed, so the app is blocked by Gatekeeper on other Macs.
 
-### 3. Distribute as DMG or ZIP created with `ditto`
+Debug builds are signed with a designated requirement that only checks the bundle identifier
+(`macos/DebugSigning.req`). Choosing "Always Allow" on the Keychain prompt once therefore holds
+across rebuilds. Release builds keep the default requirement.
 
-Avoid archive tools that can break macOS metadata/signatures.
+To distribute, set your team under Signing & Capabilities in Xcode (Developer ID Application),
+then archive and notarize via Product → Archive → Distribute App → Direct Distribution.
 
-## Temporary Testing Workaround (Not for Release)
-
-On a tester machine, this bypasses quarantine checks for a local test build:
-
-- xattr -dr com.apple.quarantine /Applications/clockify-overtime.app
-
-This is only for internal testing. Proper fix is signing + notarization.
-
-## Helpful Commands
-
-- Format source: bun run format
-- Generate app icons: bun run generate-icons
-
-## Structure
-
-- src/bun: Bun main process and Clockify analysis logic
-- src/mainview: HTML/CSS/TS desktop UI
-- src/shared: Shared RPC types
+Launch at login only replaces the LaunchAgent of older versions when the app runs from
+`/Applications`.

@@ -1,21 +1,6 @@
-import { Electroview } from "electrobun/view";
-import type { AppRPC } from "../shared/rpc.ts";
+import { bridge } from "./bridge.ts";
 import { initializeSettings } from "./settings.ts";
 import { initializeDashboard } from "./dashboard.ts";
-
-type ElectrobunClient = Electroview<AppRPC>;
-
-// Define the Electroview RPC schema (renderer-side handlers, which are empty for now)
-const rpc = Electroview.defineRPC<AppRPC>({
-  handlers: {
-    requests: {},
-    messages: {},
-  },
-  maxRequestTime: 60000, // 60 seconds for long-running API calls
-});
-
-// Create Electroview instance with the RPC definition
-const electrobun: ElectrobunClient = new Electroview({ rpc });
 
 const settingsContainer = document.querySelector("#settings-container") as HTMLDivElement;
 const dashboardContainer = document.querySelector("#dashboard-container") as HTMLDivElement;
@@ -52,9 +37,8 @@ handleNavigation();
 
 try {
   // Initialize both views
-  const { runAnalysis } = initializeDashboard(electrobun, showSettings);
+  const { runAnalysis } = initializeDashboard(showSettings);
   initializeSettings(
-    electrobun,
     () => {
       showDashboard();
       runAnalysis();
@@ -67,7 +51,7 @@ try {
   // Check if we have API key in secure storage
   void (async () => {
     try {
-      const state = await electrobun.rpc.request.getStoredApiKey({});
+      const state = await bridge.getStoredApiKey({});
       const apiKey = (state?.apiKey ?? "").trim();
       if (!apiKey) {
         showSettings();

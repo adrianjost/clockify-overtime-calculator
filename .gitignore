@@ -59,3 +59,7 @@ icon.iconset/
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Xcode
+xcuserdata/
+*.xcuserstate
