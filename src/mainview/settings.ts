@@ -1,13 +1,6 @@
-import type { Electroview } from "electrobun/view";
-import type { AppRPC } from "../shared/rpc.ts";
+import { bridge } from "./bridge.ts";
 
-type ElectrobunClient = Electroview<AppRPC>;
-
-export function initializeSettings(
-  electrobun: ElectrobunClient,
-  onSettingsSaved: () => void,
-  onCancel?: () => void,
-) {
+export function initializeSettings(onSettingsSaved: () => void, onCancel?: () => void) {
   const apiKeyInput = document.querySelector<HTMLInputElement>("#api-key");
   const saveStatus = document.querySelector<HTMLSpanElement>("#save-status");
 
@@ -35,7 +28,7 @@ export function initializeSettings(
       const enabled = trayEnabledCheckbox.checked;
       localStorage.setItem("tray_enabled", String(enabled));
       try {
-        await electrobun.rpc.request.setTrayEnabled({ enabled });
+        await bridge.setTrayEnabled({ enabled });
       } catch (err) {
         console.error("setTrayEnabled failed:", err);
         trayEnabledCheckbox.checked = !enabled;
@@ -48,17 +41,16 @@ export function initializeSettings(
   const launchAtLoginGroup = document.querySelector<HTMLElement>("#launch-at-login-group");
   const launchAtLoginCheckbox = document.querySelector<HTMLInputElement>("#launch-at-login");
   if (launchAtLoginCheckbox) {
-    launchAtLoginCheckbox.checked = localStorage.getItem("launch_at_login") === "true";
+    void bridge.getLaunchAtLogin({}).then(({ enabled }) => {
+      launchAtLoginCheckbox.checked = enabled;
+    });
     launchAtLoginCheckbox.addEventListener("change", async () => {
       const enabled = launchAtLoginCheckbox.checked;
-      localStorage.setItem("launch_at_login", String(enabled));
       try {
-        await electrobun.rpc.request.setLaunchAtLogin({ enabled });
+        await bridge.setLaunchAtLogin({ enabled });
       } catch (err) {
         console.error("setLaunchAtLogin failed:", err);
-        // Revert checkbox on failure
         launchAtLoginCheckbox.checked = !enabled;
-        localStorage.setItem("launch_at_login", String(!enabled));
       }
     });
   }
@@ -83,13 +75,13 @@ export function initializeSettings(
 
   void (async () => {
     try {
-      const state = await electrobun.rpc.request.getStoredApiKey({});
+      const state = await bridge.getStoredApiKey({});
       const secureApiKey = (state?.apiKey ?? "").trim();
       if (secureApiKey) {
         apiKeyInput.value = secureApiKey;
         hasStoredApiKey = true;
         if (trayEnabledCheckbox) {
-          const trayState = await electrobun.rpc.request.getTrayEnabled({});
+          const trayState = await bridge.getTrayEnabled({});
           const enabled = Boolean(trayState?.enabled);
           trayEnabledCheckbox.checked = enabled;
           localStorage.setItem("tray_enabled", String(enabled));
@@ -106,7 +98,7 @@ export function initializeSettings(
     const value = apiKeyInput.value.trim();
     if (value) {
       try {
-        await electrobun.rpc.request.setStoredApiKey({ apiKey: value });
+        await bridge.setStoredApiKey({ apiKey: value });
         hasStoredApiKey = true;
         applyAuthVisibility();
         saveStatus.textContent = "✓ Saved";
@@ -149,14 +141,14 @@ export function initializeSettings(
       localStorage.clear();
 
       try {
-        await electrobun.rpc.request.clearStoredApiKey({});
+        await bridge.clearStoredApiKey({});
       } catch (err) {
         console.error("clearStoredApiKey failed:", err);
       }
 
       hasStoredApiKey = false;
       applyAuthVisibility();
-      electrobun.rpc.request.closeApp({});
+      bridge.closeApp({});
     });
   }
 }

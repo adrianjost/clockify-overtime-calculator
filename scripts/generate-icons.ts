@@ -6,13 +6,13 @@ import { join } from "node:path";
 
 const projectRoot = import.meta.dir + "/..";
 const logoSvgPath = join(projectRoot, "icon-source.svg");
-const iconsetDir = join(projectRoot, "icon.iconset");
+const iconsetDir = join(projectRoot, "macos/ClockifyOvertime/Assets.xcassets/AppIcon.appiconset");
 
 // Create directories
 mkdirSync(iconsetDir, { recursive: true });
 
 // Sizes needed for macOS iconset
-const sizes = [16, 32, 64, 128, 256, 512, 1024];
+const sizes = [16, 32, 128, 256, 512];
 
 console.log("📦 Generating macOS icon set from SVG...");
 
