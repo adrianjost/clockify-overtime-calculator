@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
     <title>Clockify Overtime</title>
     <link rel="stylesheet" href="index.css" />
   </head>
@@ -10,114 +11,149 @@
     <div class="app">
       <!-- Settings View -->
       <div id="settings-container" class="settings-view">
-        <div class="settings-header">
-          <h1>Settings</h1>
-          <button
-            type="button"
-            id="close-settings-btn"
-            class="btn-icon"
-            aria-label="Close settings"
-            title="Close"
-            hidden
-          >
-            &#x2715;
-          </button>
-        </div>
-        <div class="settings-form">
-          <div class="form-group">
-            <label for="api-key">Clockify API Key</label>
-            <input
-              id="api-key"
-              type="password"
-              placeholder="e.g. AbCdEfGh12345678"
-              autocomplete="off"
-            />
-            <p class="hint">Your API key is stored locally on this device and never shared.</p>
-            <span id="save-status"></span>
+        <header class="settings-header">
+          <div class="settings-header-inner">
+            <button
+              type="button"
+              id="close-settings-btn"
+              class="back-button"
+              aria-label="Back to overview"
+              hidden
+            >
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M10 3 5 8l5 5" />
+              </svg>
+              Overview
+            </button>
+            <h1>Settings</h1>
           </div>
-        </div>
+        </header>
+        <div class="settings-scroll">
+          <section class="group">
+            <h2 class="group-title">Clockify</h2>
+            <div class="group-box">
+              <div class="row row--stacked">
+                <label for="api-key">API key</label>
+                <input
+                  id="api-key"
+                  type="password"
+                  placeholder="Paste your personal API key"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+              </div>
+            </div>
+            <p class="group-footer">
+              Stored in your Mac's Keychain and only sent to Clockify.
+              <span id="save-status" class="save-status"></span>
+            </p>
+          </section>
 
-        <div class="settings-section">
-          <div class="form-group form-group--inline" id="launch-at-login-group" hidden>
-            <label for="launch-at-login">Launch at login</label>
-            <input type="checkbox" id="launch-at-login" />
-          </div>
-          <div class="form-group form-group--inline" id="tray-enabled-group" hidden>
-            <label for="tray-enabled">Show menu bar item</label>
-            <input type="checkbox" id="tray-enabled" />
-          </div>
-        </div>
+          <section class="group">
+            <h2 class="group-title">General</h2>
+            <div class="group-box">
+              <div class="row" id="launch-at-login-group" hidden>
+                <label for="launch-at-login">Open at login</label>
+                <input type="checkbox" switch id="launch-at-login" />
+              </div>
+              <div class="row" id="tray-enabled-group" hidden>
+                <label for="tray-enabled">
+                  Show in menu bar
+                  <span class="row-hint">Keeps your balance one glance away</span>
+                </label>
+                <input type="checkbox" switch id="tray-enabled" />
+              </div>
+            </div>
+          </section>
 
-        <div class="onboarding-guide">
-          <h2>How to get your API key</h2>
-          <ol>
-            <li>
-              Open
-              <strong>clockify.me</strong> and sign in to your account.
-            </li>
-            <li>
-              Click your avatar in the top-right corner and choose
-              <strong>Preferences</strong>.
-            </li>
-            <li>
-              Open the <strong>Advanced</strong> tab and click <strong>Manage API keys</strong>.
-            </li>
-            <li>
-              Click <strong>Generate new</strong>, name the key, and paste it into the field above.
-              Clockify shows it only once.
-            </li>
-          </ol>
-          <h2>What data is accessed</h2>
-          <p>
-            The app only reads your own time entries using the standard Clockify personal API key
-            &mdash; no special permissions or admin access are required. Specifically, it fetches:
-          </p>
-          <ul>
-            <li>Your user profile (to identify your workspace)</li>
-            <li>Your time entries for the selected date range</li>
-          </ul>
-          <p>No data is written back to Clockify and nothing leaves this device.</p>
-        </div>
+          <section class="group">
+            <h2 class="group-title">Getting started</h2>
+            <div class="group-box">
+              <details class="row row--disclosure" open>
+                <summary>Where do I find my API key?</summary>
+                <ol>
+                  <li>Sign in at <strong>clockify.me</strong>.</li>
+                  <li>
+                    Click your avatar in the top-right corner and choose
+                    <strong>Preferences</strong>.
+                  </li>
+                  <li>
+                    Open the <strong>Advanced</strong> tab and click
+                    <strong>Manage API keys</strong>.
+                  </li>
+                  <li>
+                    Click <strong>Generate new</strong> and paste the key above. Clockify shows it
+                    only once.
+                  </li>
+                </ol>
+              </details>
+              <details class="row row--disclosure">
+                <summary>What does the app read?</summary>
+                <p>
+                  Only your own profile (to find your workspace) and your time entries for the
+                  selected range. Nothing is ever written back to Clockify.
+                </p>
+              </details>
+            </div>
+          </section>
 
-        <div class="settings-danger-zone">
-          <button id="reset-all-btn" class="btn-danger">Reset all stored data</button>
+          <section class="group settings-danger-zone">
+            <div class="group-box">
+              <div class="row">
+                <span class="row-label">
+                  Reset everything
+                  <span class="row-hint">Removes the API key and all cached data</span>
+                </span>
+                <button id="reset-all-btn" class="btn-danger">Reset…</button>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
 
       <!-- Dashboard View -->
       <div id="dashboard-container" class="dashboard-view" style="display: none">
-        <div class="dashboard-header">
-          <div>
-            <h1>Overtime</h1>
-            <div class="date-range-controls">
-              <div class="form-group">
-                <label for="dashboard-start-date">From</label>
-                <input id="dashboard-start-date" type="date" />
-              </div>
-              <div class="form-group">
-                <label for="dashboard-end-date">To</label>
-                <input id="dashboard-end-date" type="date" />
-              </div>
-            </div>
+        <header class="dashboard-header">
+          <div class="range-picker" id="range-picker"></div>
+          <div class="toolbar-trailing">
             <div id="last-fetched" class="last-fetched">
               <span id="fetch-spinner" class="fetch-spinner" hidden></span>
             </div>
+            <a href="#settings" class="icon-button" aria-label="Settings" title="Settings (⌘,)">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"
+                />
+              </svg>
+            </a>
           </div>
-          <div class="overtime-card" id="content" style="display: none">
-            <div class="overtime-label">Cumulative Overtime</div>
-            <div class="overtime-value" id="overtime-value">0h 0min</div>
+        </header>
+
+        <section class="hero" id="content" style="display: none">
+          <div class="hero-main">
+            <div class="hero-label">Overtime balance</div>
+            <div class="hero-value" id="overtime-value">0h 0min</div>
+            <div class="hero-mood" id="overtime-mood"></div>
           </div>
-        </div>
+          <div class="hero-stat" id="week-stat">
+            <div class="hero-label" id="week-stat-label">This week</div>
+            <div class="hero-stat-value" id="week-stat-value"></div>
+            <div class="hero-stat-detail" id="week-stat-detail"></div>
+          </div>
+        </section>
 
         <div class="charts-container">
           <div class="chart-card">
-            <h2>Daily Working Hours</h2>
+            <div class="chart-header">
+              <h2>Daily Working Hours</h2>
+              <ul class="chart-legend" aria-hidden="true">
+                <li><span class="swatch swatch--bar"></span>Worked</li>
+                <li><span class="swatch swatch--target"></span>Target</li>
+                <li><span class="swatch swatch--balance"></span>Balance</li>
+              </ul>
+            </div>
             <div id="daily-chart"></div>
           </div>
-        </div>
-
-        <div class="chart-footer">
-          <a href="#settings" class="btn-icon" aria-label="Settings" title="Settings">&#9881;</a>
         </div>
       </div>
     </div>

@@ -65,9 +65,9 @@ There are no prebuilt downloads, so build the app yourself (see Prerequisites an
 2. Open it. On first launch it shows the settings.
 3. Create a Clockify API key: in Clockify, open your profile menu → Preferences → Advanced →
    Manage API keys → Generate new, and copy the key (it is only shown once).
-4. Paste the key into the Clockify API Key field. It is stored in the Keychain.
-5. Close the settings. The dashboard shows your overtime from the start of the year (change it
-   with From/To), and the menu bar shows the total. Enable Launch at login in the settings if
+4. Paste the key into the API key field. It is stored in the Keychain.
+5. Go back to the overview. The dashboard shows your overtime for this year (pick another range
+   at the top left), and the menu bar shows the total. Turn on Open at login in the settings if
    you like.
 
 To update, pull the latest changes, build again and replace the app in `/Applications`.

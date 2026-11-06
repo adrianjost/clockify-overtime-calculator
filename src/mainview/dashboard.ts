@@ -1,5 +1,6 @@
 import type { OvertimeData } from "../shared/rpc.ts";
 import { bridge } from "./bridge.ts";
+import { initRangePicker } from "./range-picker.ts";
 
 type CumulativeMode = "daily" | "weekly";
 
@@ -7,10 +8,42 @@ type CumulativeMode = "daily" | "weekly";
 let focusRange: { start: number; end: number } | null = null;
 // Cached full dataset so interaction handlers can compute zoomed slices.
 let lastFilledData: OvertimeData["dailyData"] = [];
+// Animate the chart once when data is first shown, not on every poll, zoom or resize.
+let animateNextRender = true;
+
+type DayRange = { start: number; end: number };
+const ZOOM_ANIMATION_MS = 240;
+// Range shown by the last render, and the running zoom animation (if any).
+let renderedRange: DayRange | null = null;
+let zoomAnimation: { from: DayRange; to: DayRange; startedAt: number } | null = null;
+// Set right before a zoom/pan re-render that should animate from the current view.
+let animateZoomFrom: DayRange | null = null;
+// Daily/weekly bars, switched with some hysteresis so zooming near the threshold doesn't flip-flop.
+let useWeeklyBars = false;
+const MAX_CHART_HEIGHT = 400;
+// Per mouse wheel notch: zoom by 8%, pan by 5% of the visible range.
+const ZOOM_STEP = 0.92;
+const PAN_STEP = 0.05;
+let lastMaxContentHeight = 0;
+
+/** The range currently on screen, taking a running zoom animation into account. */
+function visibleRangeNow(): DayRange | null {
+  if (!zoomAnimation) return renderedRange;
+  const t = Math.min(1, (performance.now() - zoomAnimation.startedAt) / ZOOM_ANIMATION_MS);
+  const eased = 1 - Math.pow(1 - t, 3);
+  const { from, to } = zoomAnimation;
+  return {
+    start: from.start + (to.start - from.start) * eased,
+    end: from.end + (to.end - from.end) * eased,
+  };
+}
+
+function requestAnimatedZoom() {
+  animateZoomFrom = visibleRangeNow();
+}
 
 export function initializeDashboard(onNavigateToSettings: () => void) {
-  const startDateInput = document.querySelector<HTMLInputElement>("#dashboard-start-date");
-  const endDateInput = document.querySelector<HTMLInputElement>("#dashboard-end-date");
+  const rangePickerEl = document.querySelector<HTMLElement>("#range-picker");
   const lastFetchedEl = document.querySelector<HTMLDivElement>("#last-fetched");
   const fetchSpinner = document.querySelector<HTMLElement>("#fetch-spinner");
   const content = document.querySelector<HTMLDivElement>("#content");
@@ -18,21 +51,14 @@ export function initializeDashboard(onNavigateToSettings: () => void) {
   let lastData: OvertimeData | null = null;
   let resizeRafId: number | null = null;
 
-  if (!startDateInput || !endDateInput) {
-    throw new Error("Dashboard date elements are missing");
+  if (!rangePickerEl) {
+    throw new Error("Dashboard range picker is missing");
   }
 
-  // Initialize dates: start date from localStorage, end date defaults to end of start year
-  const today = new Date();
-
-  const savedStartDate = localStorage.getItem("clockify_viewed_start_date");
-  const startDateToUse = savedStartDate || `${today.getFullYear()}-01-01`;
-  startDateInput.value = startDateToUse;
-  endDateInput.value = computeDefaultEndDate();
-
-  function computeDefaultEndDate(): string {
-    return today.toISOString().split("T")[0];
-  }
+  const rangePicker = initRangePicker(rangePickerEl, () => {
+    focusRange = null; // Reset zoom when changing date range
+    runAnalysis();
+  });
 
   // Polling state — declared before runAnalysis so the closure can reference them
   const POLL_INTERVAL_MS = 60 * 1000; // 1 minute
@@ -52,12 +78,7 @@ export function initializeDashboard(onNavigateToSettings: () => void) {
       return;
     }
 
-    const startDate = startDateInput!.value;
-    const endDate = endDateInput!.value;
-
-    if (!startDate || !endDate) {
-      return;
-    }
+    const { startDate, endDate } = rangePicker.current();
 
     setLoading(true);
     lastFetchTime = Date.now();
@@ -78,7 +99,7 @@ export function initializeDashboard(onNavigateToSettings: () => void) {
       renderDashboard(data, overtimeValue, content);
       setLoading(false);
       if (lastFetchedEl) {
-        lastFetchedEl.textContent = `Last fetched: ${new Date().toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
+        lastFetchedEl.textContent = `Updated ${new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
         lastFetchedEl.appendChild(fetchSpinner!);
       }
     } catch (error) {
@@ -87,23 +108,6 @@ export function initializeDashboard(onNavigateToSettings: () => void) {
       if (lastFetchedEl) lastFetchedEl.textContent = `Error: ${message}`;
     }
   }
-
-  // Handle start date changes
-  startDateInput.addEventListener("change", () => {
-    localStorage.setItem("clockify_viewed_start_date", startDateInput.value);
-    // Only reset end date if it's before the new start date
-    if (!endDateInput.value || endDateInput.value < startDateInput.value) {
-      endDateInput.value = computeDefaultEndDate();
-    }
-    focusRange = null; // Reset zoom when changing date range
-    runAnalysis();
-  });
-
-  // Handle end date changes
-  endDateInput.addEventListener("change", () => {
-    focusRange = null; // Reset zoom when changing date range
-    runAnalysis();
-  });
 
   // Auto-fetch on initial load
   runAnalysis();
@@ -170,6 +174,7 @@ export function initializeDashboard(onNavigateToSettings: () => void) {
 
   // zoom-reset: reset button or dblclick, back to full range.
   document.addEventListener("zoom-reset", () => {
+    requestAnimatedZoom();
     focusRange = null;
     if (lastData) renderDashboard(lastData, overtimeValue, content);
   });
@@ -185,9 +190,9 @@ function renderDashboard(
   if (!overtimeValue || !content) return;
 
   updateOvertimeDisplay(data, overtimeValue);
+  updateWeekStat(data);
 
-  // Show content
-  content.style.display = "block";
+  content.style.removeProperty("display");
 
   // Render charts
   renderCharts(data);
@@ -197,16 +202,104 @@ function updateOvertimeDisplay(data: OvertimeData, overtimeValue: HTMLDivElement
   if (!overtimeValue) return;
 
   const totalMinutes = data.totalOvertimeHours * 60 + data.totalOvertimeMinutes;
-  const sign = totalMinutes >= 0 ? "+" : "-";
-  const absHours = Math.floor(Math.abs(totalMinutes) / 60);
-  const absMinutes = Math.abs(totalMinutes) % 60;
-  const displayText = `${sign}${absHours}h ${absMinutes}min`;
-  overtimeValue.textContent = displayText;
-  if (totalMinutes < 0) {
-    overtimeValue.style.color = "#b42318";
+  const displayText = formatMinutes(totalMinutes);
+  overtimeValue.classList.toggle("is-positive", totalMinutes > 0);
+  overtimeValue.classList.toggle("is-negative", totalMinutes < 0);
+  if (overtimeValue.dataset["minutes"] === undefined) {
+    countUp(overtimeValue, totalMinutes, displayText);
   } else {
-    overtimeValue.style.color = "#0e7c66";
+    overtimeValue.textContent = displayText;
   }
+  overtimeValue.dataset["minutes"] = String(totalMinutes);
+
+  const mood = document.querySelector<HTMLDivElement>("#overtime-mood");
+  if (mood && mood.dataset["minutes"] !== String(totalMinutes)) {
+    mood.dataset["minutes"] = String(totalMinutes);
+    const { emoji, text } = describeBalance(totalMinutes);
+    mood.innerHTML = "";
+    const emojiSpan = document.createElement("span");
+    emojiSpan.className = "emoji";
+    emojiSpan.textContent = emoji;
+    mood.append(emojiSpan, text);
+  }
+}
+
+function mondayOf(date: Date): Date {
+  const monday = new Date(date);
+  monday.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  return monday;
+}
+
+// Worked vs. target for the week (Monday–Sunday) containing the end of the range.
+function updateWeekStat(data: OvertimeData) {
+  const label = document.querySelector<HTMLElement>("#week-stat-label");
+  const value = document.querySelector<HTMLElement>("#week-stat-value");
+  const detail = document.querySelector<HTMLElement>("#week-stat-detail");
+  const last = data.dailyData[data.dailyData.length - 1];
+  if (!label || !value || !detail || !last) return;
+
+  const end = new Date(last.date + "T00:00:00");
+  const monday = mondayOf(end);
+  const weekStart = formatIsoDate(monday);
+  const week = data.dailyData.filter((d) => d.date >= weekStart && d.date <= last.date);
+
+  const worked = week.reduce((sum, d) => sum + d.actualHours, 0);
+  const target = week.reduce((sum, d) => sum + dayTarget(d), 0);
+  const daysWorked = week.filter((d) => d.actualHours > 0).length;
+  const diffMinutes = Math.round((worked - target) * 60);
+
+  label.textContent =
+    weekStart === formatIsoDate(mondayOf(new Date()))
+      ? "This week"
+      : `Week of ${monday.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+  value.textContent =
+    diffMinutes === 0
+      ? "±0"
+      : `${diffMinutes > 0 ? "+" : "−"}${formatHoursToHoursAndMinutes(diffMinutes / 60)}`;
+  value.classList.toggle("is-positive", diffMinutes > 0);
+  value.classList.toggle("is-negative", diffMinutes < 0);
+  detail.textContent =
+    daysWorked === 0
+      ? "Nothing tracked yet"
+      : `${formatHoursToHoursAndMinutes(worked)} of ${formatHoursToHoursAndMinutes(target)} · ${daysWorked} ${daysWorked === 1 ? "day" : "days"}`;
+}
+
+function formatMinutes(totalMinutes: number): string {
+  const sign = totalMinutes >= 0 ? "+" : "−";
+  return `${sign}${formatHoursToHoursAndMinutes(totalMinutes / 60)}`;
+}
+
+function countUp(element: HTMLElement, totalMinutes: number, finalText: string) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    element.textContent = finalText;
+    return;
+  }
+  const duration = 1300;
+  const start = performance.now();
+  const step = (now: number) => {
+    const t = Math.min(1, (now - start) / duration);
+    const eased = 1 - Math.pow(1 - t, 3);
+    element.textContent = t < 1 ? formatMinutes(Math.round(totalMinutes * eased)) : finalText;
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+const WORKDAY_MINUTES = 8 * 60;
+
+function describeBalance(totalMinutes: number): { emoji: string; text: string } {
+  const days = totalMinutes / WORKDAY_MINUTES;
+  if (totalMinutes === 0) return { emoji: "🎯", text: "Right on target." };
+  if (totalMinutes > 0) {
+    if (days >= 2) return { emoji: "🏝️", text: `About ${Math.floor(days)} days off banked.` };
+    if (days >= 1) return { emoji: "🏖️", text: "A whole day off banked." };
+    if (days >= 0.5) return { emoji: "🌴", text: "Half a day off banked." };
+    if (totalMinutes >= 60) return { emoji: "☕️", text: "A long lunch banked." };
+    return { emoji: "✨", text: "Slightly ahead." };
+  }
+  if (days <= -1) return { emoji: "🐢", text: "About a day to catch up." };
+  if (totalMinutes <= -60) return { emoji: "⏳", text: "A few hours to catch up." };
+  return { emoji: "🙂", text: "Almost there." };
 }
 
 function renderCharts(data: OvertimeData) {
@@ -227,7 +320,9 @@ function renderCharts(data: OvertimeData) {
     dailyContainer.innerHTML = "";
 
     // Fill missing calendar days with zero-hour entries.
-    const filledDailyData = fillMissingDays(data.dailyData);
+    const trackedDays = fillMissingDays(data.dailyData);
+    // Leave room for the rest of the last week, so the chart doesn't end abruptly mid-week.
+    const filledDailyData = padToWeekEnd(trackedDays);
     lastFilledData = filledDailyData;
 
     // Apply focus range (zoom/pan). Full year when null.
@@ -238,48 +333,12 @@ function renderCharts(data: OvertimeData) {
           end: Math.min(totalLen - 1, focusRange.end),
         }
       : { start: 0, end: totalLen - 1 };
-    const visibleData = filledDailyData.slice(effective.start, effective.end + 1);
-
-    // Prepare data from visible slice
-    const dailyDates = visibleData.map((d) => d.date);
-    const actualHours = visibleData.map((d) => d.actualHours);
-
-    // Create display labels — density adapts to how many days are visible.
-    // ≤60 days visible: show "Mar 5"-style labels on every week start + month changes.
-    // >60 days visible: only show month names on month changes (original behaviour).
-    const visibleCount = visibleData.length;
-    const showDayLabels = visibleCount <= 60;
-
-    const displayLabels = dailyDates.map((date, index) => {
-      const current = new Date(date + "T00:00:00");
-      const isFirstEntry = index === 0;
-      let previousMonth = -1;
-      if (index > 0) {
-        previousMonth = new Date(dailyDates[index - 1] + "T00:00:00").getMonth();
-      }
-      const isNewMonth = current.getMonth() !== previousMonth;
-
-      if (showDayLabels) {
-        // Show a label on Mondays (start of week) and on month changes.
-        const isMonday = current.getDay() === 1;
-        if (isFirstEntry || isNewMonth || isMonday) {
-          if (isNewMonth || isFirstEntry) {
-            return current.toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-            });
-          }
-          return current.toLocaleDateString("en-US", { day: "numeric" });
-        }
-        return "";
-      }
-
-      // Default: month name only on month changes
-      if (isFirstEntry || isNewMonth) {
-        return current.toLocaleDateString("en-US", { month: "short" });
-      }
-      return "";
-    });
+    // The range may be fractional while zooming; bars are positioned by date anyway.
+    const visibleData = filledDailyData.slice(
+      Math.floor(effective.start),
+      Math.ceil(effective.end) + 1,
+    );
+    const visibleCount = effective.end - effective.start + 1;
 
     // Render bar chart
     const chartWidth = Math.max(360, Math.floor(dailyContainer.clientWidth || 800));
@@ -288,39 +347,40 @@ function renderCharts(data: OvertimeData) {
     const chartsContainer = document.querySelector<HTMLDivElement>(".charts-container");
     let chartHeight = 300; // default
     if (chartsContainer) {
-      // Account for chart title (h2) and margins
       const h2 = dailyContainer.parentElement?.querySelector("h2");
       const h2Height = h2 ? h2.offsetHeight + 8 : 0;
-      const availableHeight = Math.max(200, chartsContainer.clientHeight - h2Height - 16);
-      chartHeight = Math.min(400, availableHeight);
+      const spaceForChart = chartsContainer.clientHeight - h2Height - 16;
+      chartHeight = Math.min(MAX_CHART_HEIGHT, Math.max(200, spaceForChart));
+      // Don't let the window grow taller than the chart can use.
+      const maxContentHeight = Math.ceil(window.innerHeight + MAX_CHART_HEIGHT - spaceForChart);
+      if (Math.abs(maxContentHeight - lastMaxContentHeight) > 1) {
+        lastMaxContentHeight = maxContentHeight;
+        void bridge.setContentMaxHeight({ height: maxContentHeight });
+      }
     }
 
-    // Determine density mode based on visible bar count
-    const shouldUseWeekly = chartWidth / visibleData.length < 8;
+    const pixelsPerDay = chartWidth / visibleCount;
+    useWeeklyBars = useWeeklyBars ? pixelsPerDay < 11 : pixelsPerDay < 8;
+    const shouldUseWeekly = useWeeklyBars;
 
-    // Build cumulative on full data for correct running totals, then slice
+    // Bars for the whole range, positioned by date. The chart is a window onto them,
+    // like a large image, so nothing changes shape while zooming or panning.
     const cumulativeMode: CumulativeMode = shouldUseWeekly ? "weekly" : "daily";
-    const cumulativeHours = buildCumulativeSeries(filledDailyData, cumulativeMode).slice(
-      effective.start,
-      effective.end + 1,
-    );
+    const fullCumulative = buildCumulativeSeries(filledDailyData, cumulativeMode);
+    const allBars = shouldUseWeekly
+      ? weeklyBars(filledDailyData, fullCumulative)
+      : dailyBars(trackedDays, fullCumulative, visibleCount <= 60);
+    const firstVisible = allBars.findIndex((bar) => bar.start + bar.span > effective.start);
+    let lastVisible = allBars.length - 1;
+    while (lastVisible > 0 && allBars[lastVisible].start > effective.end) lastVisible--;
+    // Two extra bars on each side keep the balance curve's shape stable at the edges.
+    const shownBars = allBars.slice(Math.max(0, firstVisible - 2), lastVisible + 3);
 
-    let dataToUse = actualHours;
-    let cumulativeToUse = cumulativeHours;
-    let labelsToUse = displayLabels;
-    let datesToUse = dailyDates;
-    let weeklyReferenceHoursToUse: number[] | undefined;
-    let weeklyEndDatesToUse: string[] | undefined;
-
-    if (shouldUseWeekly) {
-      const weeklyData = aggregateToWeekly(visibleData, cumulativeHours);
-      dataToUse = weeklyData.hours;
-      cumulativeToUse = weeklyData.cumulative;
-      labelsToUse = weeklyData.labels;
-      datesToUse = weeklyData.dates;
-      weeklyReferenceHoursToUse = weeklyData.referenceHours;
-      weeklyEndDatesToUse = weeklyData.endDates;
-    }
+    const yDomain: YDomain = {
+      maxHours: Math.max(...allBars.map((bar) => Math.max(bar.hours, bar.detail.target)), 8),
+      cumulativeMin: Math.min(...allBars.map((bar) => bar.cumulative), 0),
+      cumulativeMax: Math.max(...allBars.map((bar) => bar.cumulative), 0),
+    };
 
     // Update chart title; show date range + reset button when zoomed
     const h2Title = dailyContainer.parentElement?.querySelector("h2");
@@ -337,12 +397,12 @@ function renderCharts(data: OvertimeData) {
         const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
         const rangeSpan = document.createElement("span");
         rangeSpan.className = "chart-range-label";
-        rangeSpan.textContent = ` · ${fmt(startDate)}–${fmt(endDate)}`;
+        rangeSpan.textContent = `· ${fmt(startDate)} – ${fmt(endDate)}`;
         h2Title.appendChild(rangeSpan);
 
         const resetBtn = document.createElement("button");
         resetBtn.className = "zoom-reset-btn";
-        resetBtn.textContent = "×";
+        resetBtn.textContent = "Reset zoom";
         resetBtn.title = "Reset zoom";
         resetBtn.addEventListener("click", () => {
           dailyContainer!.dispatchEvent(new CustomEvent("zoom-reset", { bubbles: true }));
@@ -355,18 +415,35 @@ function renderCharts(data: OvertimeData) {
     dailyContainer.style.cursor = focusRange !== null ? "grab" : "";
 
     const barSvg = createBarChart(
-      dataToUse,
-      cumulativeToUse,
-      labelsToUse,
-      datesToUse,
-      "rgba(132, 150, 163, 0.45)",
+      shownBars,
+      effective.start,
+      visibleCount,
       chartWidth,
       chartHeight,
       shouldUseWeekly,
-      weeklyReferenceHoursToUse,
-      weeklyEndDatesToUse,
+      yDomain,
     );
+    let intro: HTMLElement | null = null;
+    if (animateNextRender) {
+      animateNextRender = false;
+      // Start once the window has painted, so the first frames aren't dropped.
+      barSvg.classList.add("is-entering", "is-paused");
+      intro = buildBarIntro(barSvg);
+      const start = () => {
+        barSvg.classList.remove("is-paused");
+        intro?.classList.remove("is-paused");
+      };
+      requestAnimationFrame(() => requestAnimationFrame(start));
+      setTimeout(start, 250);
+    }
+    if (intro) dailyContainer.appendChild(intro);
     dailyContainer.appendChild(barSvg);
+    animateZoom(barSvg, effective);
+    addScrollButtons(dailyContainer, barSvg, effective, totalLen);
+    const balanceLine = barSvg.querySelector<SVGPathElement>(".chart-balance");
+    if (balanceLine) {
+      barSvg.style.setProperty("--length", String(Math.ceil(balanceLine.getTotalLength())));
+    }
 
     console.log("Charts created successfully");
   } catch (error) {
@@ -374,6 +451,108 @@ function renderCharts(data: OvertimeData) {
     if (error instanceof Error) {
       console.error("Stack trace:", error.stack);
     }
+  }
+}
+
+/**
+ * FLIP-style zoom: start the new plot with an x-transform that reproduces the previous
+ * view, then transition to identity. Both views map calendar days linearly to x.
+ */
+/**
+ * SVG shapes can't be composited, so the bars grow in as HTML elements (scaleY on their own
+ * layers) underneath the chart, which then switches back to its own SVG bars.
+ */
+function buildBarIntro(svg: SVGSVGElement): HTMLElement {
+  const left = Number(svg.dataset["plotLeft"]);
+  const intro = document.createElement("div");
+  intro.className = "chart-bar-intro is-paused";
+  intro.style.left = `${left}px`;
+  intro.style.width = `${svg.dataset["plotWidth"]}px`;
+  intro.style.height = `${svg.getAttribute("height")}px`;
+
+  for (const slot of Array.from(svg.querySelectorAll<SVGGElement>(".chart-bar-slot"))) {
+    const rect = slot.querySelector("rect");
+    if (!rect) continue;
+    const attr = (element: Element, name: string) => Number(element.getAttribute(name));
+    const y = attr(rect, "y");
+    const bar = document.createElement("div");
+    bar.className = "chart-bar-intro__bar";
+    bar.style.left = `${attr(rect, "x") - left}px`;
+    bar.style.top = `${y}px`;
+    bar.style.width = `${attr(rect, "width")}px`;
+    bar.style.height = `${attr(rect, "height")}px`;
+    bar.style.borderRadius = `${attr(rect, "rx")}px`;
+    bar.style.animationDelay = slot.style.animationDelay;
+    intro.appendChild(bar);
+  }
+
+  svg.classList.add("is-bar-intro");
+  const finish = () => {
+    svg.classList.remove("is-bar-intro");
+    intro.remove();
+  };
+  const lastBar = intro.lastElementChild;
+  if (lastBar) lastBar.addEventListener("animationend", finish, { once: true });
+  else finish();
+  setTimeout(finish, 3000); // in case the animation never runs, e.g. in a hidden window
+  return intro;
+}
+
+function animateZoom(svg: SVGSVGElement, to: DayRange) {
+  const from = animateZoomFrom;
+  animateZoomFrom = null;
+  renderedRange = to;
+  const plot = svg.querySelector<SVGGElement>(".chart-plot");
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!from || !plot || reduceMotion) {
+    zoomAnimation = null;
+    return;
+  }
+  const left = Number(svg.dataset["plotLeft"]);
+  const width = Number(svg.dataset["plotWidth"]);
+  const fromCount = from.end - from.start + 1;
+  const toCount = to.end - to.start + 1;
+  const scale = toCount / fromCount;
+  const offset = left - scale * left + ((to.start - from.start) * width) / fromCount;
+  if (Math.abs(scale - 1) < 0.001 && Math.abs(offset) < 0.5) return;
+
+  zoomAnimation = { from, to, startedAt: performance.now() };
+  plot.style.transform = `matrix(${scale}, 0, 0, 1, ${offset}, 0)`;
+  plot.getBoundingClientRect(); // commit the start state before transitioning
+  plot.style.transition = `transform ${ZOOM_ANIMATION_MS}ms cubic-bezier(0.33, 1, 0.68, 1)`;
+  plot.style.transform = "";
+}
+
+function addScrollButtons(
+  container: HTMLElement,
+  svg: SVGSVGElement,
+  range: DayRange,
+  totalLen: number,
+) {
+  if (!focusRange) return;
+  const left = Number(svg.dataset["plotLeft"]);
+  const width = Number(svg.dataset["plotWidth"]);
+  const visibleCount = range.end - range.start + 1;
+
+  for (const direction of [-1, 1] as const) {
+    const canScroll = direction < 0 ? range.start > 0.01 : range.end < totalLen - 1.01;
+    if (!canScroll) continue;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `chart-scroll-button chart-scroll-button--${direction < 0 ? "left" : "right"}`;
+    button.setAttribute("aria-label", direction < 0 ? "Show earlier" : "Show later");
+    button.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="${direction < 0 ? "M10 3 5 8l5 5" : "m6 3 5 5-5 5"}"/></svg>`;
+    button.style.left = `${direction < 0 ? left + 6 : left + width - 34}px`;
+    button.addEventListener("pointerdown", (e) => e.stopPropagation());
+    button.addEventListener("dblclick", (e) => e.stopPropagation());
+    button.addEventListener("click", () => {
+      const step = Math.max(1, Math.round(visibleCount * 0.8));
+      const start = Math.min(Math.max(0, range.start + direction * step), totalLen - visibleCount);
+      requestAnimatedZoom();
+      focusRange = { start, end: start + visibleCount - 1 };
+      container.dispatchEvent(new CustomEvent("chart-interaction", { bubbles: true }));
+    });
+    container.appendChild(button);
   }
 }
 
@@ -387,6 +566,9 @@ function aggregateToWeekly(
   dates: string[];
   endDates: string[];
   referenceHours: number[];
+  daysWorked: number[];
+  starts: number[];
+  spans: number[];
 } {
   // Group daily data by ISO week (Monday-based)
   const weekKeyToData = new Map<
@@ -416,10 +598,15 @@ function aggregateToWeekly(
   const endDates: string[] = [];
   const cumulative: number[] = [];
   const referenceHours: number[] = [];
+  const daysWorked: number[] = [];
+  const starts: number[] = [];
+  const spans: number[] = [];
 
   for (const weekKey of weekOrder) {
     const weekData = weekKeyToData.get(weekKey)!;
     const indices = weekData.indices;
+    starts.push(indices[0]);
+    spans.push(indices.length);
 
     // Sum actual hours for the week
     const weekHours = indices.reduce((sum, i) => sum + filledDailyData[i].actualHours, 0);
@@ -429,9 +616,10 @@ function aggregateToWeekly(
     dates.push(weekData.startDate);
     endDates.push(weekData.endDate);
 
-    // Weekly reference: 8h for each day with recorded work in this week.
-    const workedDays = indices.filter((i) => filledDailyData[i].actualHours > 0).length;
-    referenceHours.push(workedDays * 8);
+    // Same rule as the overtime calculation: 8h for each weekday with tracked time.
+    const workedIndices = indices.filter((i) => filledDailyData[i].actualHours > 0);
+    referenceHours.push(workedIndices.reduce((sum, i) => sum + dayTarget(filledDailyData[i]), 0));
+    daysWorked.push(workedIndices.length);
 
     // Cumulative is taken from the provided cumulative array (respects mode: daily/weekly)
     // Use the last index of the week to get the cumulative at week's end
@@ -460,7 +648,63 @@ function aggregateToWeekly(
     return "";
   });
 
-  return { hours, cumulative, labels, dates, endDates, referenceHours };
+  return { hours, cumulative, labels, dates, endDates, referenceHours, daysWorked, starts, spans };
+}
+
+/** A bar spanning `span` calendar days from day index `start` of the filled data. */
+type ChartBar = {
+  start: number;
+  span: number;
+  date: string;
+  endDate?: string;
+  hours: number;
+  cumulative: number;
+  label: string;
+  detail: BarDetail;
+};
+
+function weeklyBars(days: OvertimeData["dailyData"], cumulative: number[]): ChartBar[] {
+  const weeks = aggregateToWeekly(days, cumulative);
+  return weeks.hours.map((hours, i) => ({
+    start: weeks.starts[i],
+    span: weeks.spans[i],
+    date: weeks.dates[i],
+    endDate: weeks.endDates[i],
+    hours,
+    cumulative: weeks.cumulative[i],
+    label: weeks.labels[i],
+    detail: { target: weeks.referenceHours[i], daysWorked: weeks.daysWorked[i] },
+  }));
+}
+
+function dailyBars(
+  days: OvertimeData["dailyData"],
+  cumulative: number[],
+  showDayLabels: boolean,
+): ChartBar[] {
+  return days.map((day, i) => {
+    const current = new Date(day.date + "T00:00:00");
+    const isNewMonth =
+      i === 0 || current.getMonth() !== new Date(days[i - 1].date + "T00:00:00").getMonth();
+    let label = "";
+    if (isNewMonth) {
+      label = current.toLocaleDateString(
+        "en-US",
+        showDayLabels ? { month: "short", day: "numeric" } : { month: "short" },
+      );
+    } else if (showDayLabels && current.getDay() === 1) {
+      label = current.toLocaleDateString("en-US", { day: "numeric" });
+    }
+    return {
+      start: i,
+      span: 1,
+      date: day.date,
+      hours: day.actualHours,
+      cumulative: cumulative[i],
+      label,
+      detail: { target: dayTarget(day), isWeekend: isWeekend(day.date) },
+    };
+  });
 }
 
 function buildCumulativeSeries(
@@ -533,68 +777,214 @@ function setupChartInteraction(container: HTMLDivElement): void {
   let dragStartX = 0;
   let dragStartRange: { start: number; end: number } | null = null;
   let interactionRafId: number | null = null;
-  // Accumulated fractional zoom, normalised against macOS high-resolution trackpad
-  let zoomAccumulator = 0;
 
   function dispatchRerender() {
     container.dispatchEvent(new CustomEvent("chart-interaction", { bubbles: true }));
   }
 
-  // Scroll to zoom in/out, centered on the mouse position
+  // One gesture either pans or zooms, decided by its first event.
+  let gestureAxis: "x" | "y" | null = null;
+  let gestureTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** The plot area on screen; zoom and pan are relative to it, not the padded container. */
+  function plotBox(): { left: number; width: number } {
+    const svg = container.querySelector<SVGSVGElement>("svg");
+    const box = (svg ?? container).getBoundingClientRect();
+    const left = Number(svg?.dataset["plotLeft"] ?? 0);
+    const width = Number(svg?.dataset["plotWidth"] ?? box.width);
+    return { left: box.left + left, width };
+  }
+
+  function clampPan(start: number, count: number, len: number): DayRange {
+    const clamped = Math.min(Math.max(0, start), len - count);
+    return { start: clamped, end: clamped + count - 1 };
+  }
+
+  function rerenderNextFrame() {
+    if (interactionRafId !== null) return;
+    interactionRafId = requestAnimationFrame(() => {
+      interactionRafId = null;
+      dispatchRerender();
+    });
+  }
+
+  function zoomRange(range: DayRange, factor: number, relX: number, len: number): DayRange | null {
+    const count = range.end - range.start + 1;
+    const newCount = Math.max(14, Math.min(len, count * factor));
+    if (newCount > len - 0.5) return null; // snap to the full range
+    const pivot = range.start + relX * count;
+    const start = Math.max(0, Math.min(len - newCount, pivot - relX * newCount));
+    return { start, end: start + newCount - 1 };
+  }
+
+  let pinchBase: DayRange | null = null;
+
+  // Ctrl/⌘ + wheel zooms, Shift + wheel pans, a horizontal trackpad swipe pans.
   container.addEventListener(
     "wheel",
     (e) => {
-      e.preventDefault();
+      // The fingers of a pinch also produce scroll events; the pinch handles them.
+      if (pinchBase) {
+        e.preventDefault();
+        return;
+      }
       const len = lastFilledData.length;
       if (!len) return;
 
-      const current = focusRange ?? { start: 0, end: len - 1 };
-      const visibleCount = current.end - current.start + 1;
+      // A mouse wheel notch moves a small fixed step, however large its delta is.
+      const delta = e.deltaX || e.deltaY;
+      const isNotch = e.deltaMode !== 0 || (Math.abs(delta) >= 40 && Number.isInteger(delta));
 
-      const rect = container.getBoundingClientRect();
-      const relX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-
-      // macOS trackpad sends many small deltaY events; normalise to avoid
-      // over-sensitivity. Clamp per-event contribution to ±30 units.
-      const rawDelta =
-        e.deltaMode === 0 // DOM_DELTA_PIXEL (trackpad)
-          ? Math.max(-30, Math.min(30, e.deltaY))
-          : e.deltaY * 20; // DOM_DELTA_LINE (mouse wheel)
-
-      zoomAccumulator += rawDelta;
-
-      // Only commit a zoom step every 60 accumulated units
-      const STEP_THRESHOLD = 60;
-      if (Math.abs(zoomAccumulator) < STEP_THRESHOLD) return;
-
-      const steps = Math.trunc(zoomAccumulator / STEP_THRESHOLD);
-      zoomAccumulator -= steps * STEP_THRESHOLD;
-
-      // Each step shrinks/grows the visible range by ~20%
-      const factor = steps > 0 ? Math.pow(0.8, steps) : Math.pow(1.25, -steps);
-      const newCount = Math.round(Math.max(14, Math.min(len, visibleCount * factor)));
-
-      if (newCount >= len) {
-        focusRange = null;
-      } else {
-        const pivot = current.start + relX * visibleCount;
-        let newStart = Math.round(pivot - relX * newCount);
-        let newEnd = newStart + newCount - 1;
-        if (newStart < 0) {
-          newEnd -= newStart;
-          newStart = 0;
-        }
-        if (newEnd >= len) {
-          newStart -= newEnd - len + 1;
-          newEnd = len - 1;
-        }
-        newStart = Math.max(0, newStart);
-        focusRange = { start: newStart, end: newEnd };
+      // Shift + wheel pans (mouse wheels have no horizontal axis).
+      if (e.shiftKey) {
+        e.preventDefault();
+        if (!focusRange) return;
+        const count = focusRange.end - focusRange.start + 1;
+        const days = isNotch
+          ? Math.sign(delta) * count * PAN_STEP
+          : (delta * count) / plotBox().width;
+        if (isNotch) requestAnimatedZoom();
+        focusRange = clampPan(focusRange.start + days, count, len);
+        if (isNotch) dispatchRerender();
+        else rerenderNextFrame();
+        return;
       }
-      dispatchRerender();
+
+      // Ctrl/⌘ + wheel always zooms.
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const plot = plotBox();
+        const relX = Math.max(0, Math.min(1, (e.clientX - plot.left) / plot.width));
+        const current = focusRange ?? { start: 0, end: len - 1 };
+        // Wheel up (away from you) zooms in, as in maps and design tools.
+        const factor = isNotch
+          ? e.deltaY < 0
+            ? ZOOM_STEP
+            : 1 / ZOOM_STEP
+          : Math.exp(Math.max(-50, Math.min(50, e.deltaY)) * 0.01);
+        if (isNotch) requestAnimatedZoom();
+        focusRange = zoomRange(current, factor, relX, len);
+        if (isNotch) dispatchRerender();
+        else rerenderNextFrame();
+        return;
+      }
+
+      // Without a modifier only a horizontal swipe pans; vertical scrolling is left alone.
+      clearTimeout(gestureTimer);
+      gestureTimer = setTimeout(() => {
+        gestureAxis = null;
+      }, 180);
+      gestureAxis ??= Math.abs(e.deltaX) > Math.abs(e.deltaY) ? "x" : "y";
+      if (gestureAxis !== "x" || !focusRange) return;
+      e.preventDefault();
+      const count = focusRange.end - focusRange.start + 1;
+      focusRange = clampPan(focusRange.start + (e.deltaX * count) / plotBox().width, count, len);
+      rerenderNextFrame();
     },
     { passive: false },
   );
+
+  // Trackpad pinch. The app forwards it natively (see ChartWebView.swift), as WebKit's
+  // gesture events stop once a re-render replaces the element under the fingers.
+  let pinchScale = 1;
+  function pinch(phase: "start" | "change" | "end", scale: number, clientX: number) {
+    const len = lastFilledData.length;
+    if (phase === "end" || !len) {
+      pinchBase = null;
+      return;
+    }
+    if (phase === "start") {
+      pinchBase = focusRange ?? { start: 0, end: len - 1 };
+      pinchScale = 1;
+    }
+    if (!pinchBase) return;
+    pinchScale = scale;
+    const plot = plotBox();
+    const relX = Math.max(0, Math.min(1, (clientX - plot.left) / plot.width));
+    focusRange = zoomRange(pinchBase, 1 / Math.max(pinchScale, 0.01), relX, len);
+    rerenderNextFrame();
+  }
+  (window as Window & { nativePinch?: typeof nativePinch }).nativePinch = nativePinch;
+  function nativePinch(
+    phase: "start" | "change" | "end",
+    magnification: number,
+    x: number,
+    y: number,
+  ) {
+    if (phase === "start") {
+      const box = container.getBoundingClientRect();
+      if (x < box.left || x > box.right || y < box.top || y > box.bottom) return;
+      pinch("start", 1, x);
+    } else if (pinchBase) {
+      pinch(phase, pinchScale * (1 + magnification), x);
+    }
+  }
+  const pinchEvent = (e: Event) => e as Event & { scale: number; clientX: number };
+  container.addEventListener("gesturestart", (e) => {
+    e.preventDefault();
+    pinch("start", 1, pinchEvent(e).clientX);
+  });
+  container.addEventListener("gesturechange", (e) => {
+    e.preventDefault();
+    const { scale, clientX } = pinchEvent(e);
+    pinch("change", scale, clientX);
+  });
+  container.addEventListener("gestureend", (e) => {
+    e.preventDefault();
+    pinch("end", 1, 0);
+  });
+
+  // Arrow keys: ←/→ pan, ↑/↓ zoom around the centre; Esc resets the zoom.
+  // ⌘+ / ⌘- zoom and ⌘0 resets, like page zoom elsewhere.
+  document.addEventListener("keydown", (e) => {
+    const command = e.metaKey || e.ctrlKey;
+    const zoomShortcut = command && ["+", "=", "-", "0"].includes(e.key);
+    if (e.defaultPrevented || e.altKey || (command && !zoomShortcut)) return;
+    if (!container.offsetParent || document.querySelector('[aria-expanded="true"]')) return;
+    if ((e.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable]")) {
+      return;
+    }
+    const len = lastFilledData.length;
+    if (!len) return;
+    const current = focusRange ?? { start: 0, end: len - 1 };
+    const count = current.end - current.start + 1;
+    let next: DayRange | null;
+    switch (zoomShortcut ? `Cmd${e.key}` : e.key) {
+      case "Cmd+":
+      case "Cmd=":
+        next = zoomRange(current, 0.8, 0.5, len);
+        break;
+      case "Cmd-":
+        next = zoomRange(current, 1.25, 0.5, len);
+        break;
+      case "Cmd0":
+        if (!focusRange) return;
+        next = null;
+        break;
+      case "ArrowLeft":
+      case "ArrowRight":
+        if (!focusRange) return;
+        next = clampPan(current.start + (e.key === "ArrowLeft" ? -0.15 : 0.15) * count, count, len);
+        break;
+      case "ArrowUp":
+        next = zoomRange(current, 0.8, 0.5, len);
+        break;
+      case "ArrowDown":
+        next = zoomRange(current, 1.25, 0.5, len);
+        break;
+      case "Escape":
+        if (!focusRange) return;
+        next = null;
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    if (!next && !focusRange) return;
+    requestAnimatedZoom();
+    focusRange = next;
+    dispatchRerender();
+  });
 
   // Drag to pan when zoomed in
   container.addEventListener("pointerdown", (e) => {
@@ -609,29 +999,11 @@ function setupChartInteraction(container: HTMLDivElement): void {
   container.addEventListener("pointermove", (e) => {
     if (!isDragging || !dragStartRange) return;
     const len = lastFilledData.length;
-    const rect = container.getBoundingClientRect();
     const visibleCount = dragStartRange.end - dragStartRange.start + 1;
-    const pixelsPerBar = rect.width / visibleCount;
-    const deltaBars = Math.round(-(e.clientX - dragStartX) / pixelsPerBar);
+    const deltaDays = (-(e.clientX - dragStartX) * visibleCount) / plotBox().width;
+    focusRange = clampPan(dragStartRange.start + deltaDays, visibleCount, len);
 
-    let newStart = dragStartRange.start + deltaBars;
-    let newEnd = dragStartRange.end + deltaBars;
-    if (newStart < 0) {
-      newEnd -= newStart;
-      newStart = 0;
-    }
-    if (newEnd >= len) {
-      newStart -= newEnd - len + 1;
-      newEnd = len - 1;
-    }
-    newStart = Math.max(0, newStart);
-    focusRange = { start: newStart, end: newStart + visibleCount - 1 };
-
-    if (interactionRafId !== null) cancelAnimationFrame(interactionRafId);
-    interactionRafId = requestAnimationFrame(() => {
-      interactionRafId = null;
-      dispatchRerender();
-    });
+    rerenderNextFrame();
   });
 
   const endDrag = (_e: PointerEvent) => {
@@ -645,6 +1017,7 @@ function setupChartInteraction(container: HTMLDivElement): void {
 
   // Double-click to reset to full range
   container.addEventListener("dblclick", () => {
+    requestAnimatedZoom();
     focusRange = null;
     container.dispatchEvent(new CustomEvent("zoom-reset", { bubbles: true }));
   });
@@ -658,39 +1031,61 @@ function getWeekKey(isoDate: string): string {
   return formatIsoDate(date);
 }
 
+type YDomain = { maxHours: number; cumulativeMin: number; cumulativeMax: number };
+
 function createBarChart(
-  data: number[],
-  cumulativeData: number[],
-  labels: string[],
-  dates: string[],
-  color: string,
+  chartBars: ChartBar[],
+  firstDay: number,
+  dayCount: number,
   width: number,
   height: number,
   isWeeklyView: boolean,
-  weeklyReferenceHours?: number[],
-  weeklyEndDates?: string[],
+  yDomain: YDomain,
 ): SVGSVGElement {
-  const padding = { top: 20, right: 25, bottom: 15, left: 25 };
+  const padding = { top: 20, right: 25, bottom: 22, left: 25 };
   const chartWidth = width - padding.left - padding.right;
+  const data = chartBars.map((bar) => bar.hours);
+  const cumulativeData = chartBars.map((bar) => bar.cumulative);
+  const dayWidth = chartWidth / dayCount;
+  const slotX = (index: number) => padding.left + (chartBars[index].start - firstDay) * dayWidth;
+  const slotWidth = (index: number) => chartBars[index].span * dayWidth;
+  const slotCenter = (index: number) => slotX(index) + slotWidth(index) / 2;
   const chartHeight = height - padding.top - padding.bottom;
 
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("width", String(width));
   svg.setAttribute("height", String(height));
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  svg.dataset["plotLeft"] = String(padding.left);
+  svg.dataset["plotWidth"] = String(chartWidth);
 
-  const maxReferenceHours = isWeeklyView ? Math.max(...(weeklyReferenceHours ?? [0]), 0) : 8;
-  const rawMax = Math.max(...data, maxReferenceHours, 1);
+  // Everything that moves when zooming lives in the clipped plot group.
+  const plotClip = document.createElementNS("http://www.w3.org/2000/svg", "clipPath");
+  plotClip.setAttribute("id", "chart-plot-clip");
+  const plotClipRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  plotClipRect.setAttribute("x", String(padding.left));
+  plotClipRect.setAttribute("y", "0");
+  plotClipRect.setAttribute("width", String(chartWidth));
+  plotClipRect.setAttribute("height", String(height));
+  plotClip.appendChild(plotClipRect);
+  svg.appendChild(plotClip);
+  const clipGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  clipGroup.setAttribute("clip-path", "url(#chart-plot-clip)");
+  const plot = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  plot.setAttribute("class", "chart-plot");
+  clipGroup.appendChild(plot);
+  svg.appendChild(clipGroup);
+
+  const rawMax = Math.max(yDomain.maxHours, 1);
   // Coarser ticks on narrow widths or short heights
   const maxLeftTicks = width < 640 ? 5 : height < 250 ? 5 : 8;
   // Step must be a divisor of 8 so both 0 and the reference line value fit cleanly.
   const leftStep = ([2, 4, 8] as const).find((s) => Math.ceil(rawMax / s) <= maxLeftTicks) ?? 8;
   const leftMax = Math.ceil(rawMax / leftStep) * leftStep;
-  const barWidth = chartWidth / data.length;
 
   // Compute a nice integer axis range for the right (cumulative) axis.
-  const rawCumMin = Math.min(...cumulativeData, 0);
-  const rawCumMax = Math.max(...cumulativeData, 0);
+  const rawCumMin = yDomain.cumulativeMin;
+  const rawCumMax = yDomain.cumulativeMax;
   const rawCumRange = rawCumMax - rawCumMin || 1;
   const maxRightTicks = width < 640 ? 5 : height < 250 ? 5 : 8;
   const rightStep =
@@ -706,8 +1101,7 @@ function createBarChart(
     text.setAttribute("x", String(padding.left - 10));
     text.setAttribute("y", String(y + 5));
     text.setAttribute("text-anchor", "end");
-    text.setAttribute("font-size", "12");
-    text.setAttribute("fill", "#666");
+    text.setAttribute("class", "chart-axis-label");
     text.textContent = String(v);
     svg.appendChild(text);
   }
@@ -716,35 +1110,41 @@ function createBarChart(
   let lastLabelX = Number.NEGATIVE_INFINITY;
   const minLabelSpacing = width < 640 ? 56 : 44;
 
+  hideChartTooltip();
+  const bars: SVGRectElement[] = [];
+  const barGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  barGroup.setAttribute("class", "chart-bars");
+  plot.appendChild(barGroup);
+  // Week targets sit above the bars and fade in once the bars have grown in.
+  const targetGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  targetGroup.setAttribute("class", "chart-targets");
+  plot.appendChild(targetGroup);
+
   data.forEach((value, index) => {
     const barHeight = (value / leftMax) * chartHeight;
-    const x = padding.left + index * barWidth + barWidth * 0.1;
+    const x = slotX(index) + slotWidth(index) * 0.1;
     const y = padding.top + chartHeight - barHeight;
-    const actualBarWidth = barWidth * 0.8;
+    const actualBarWidth = slotWidth(index) * 0.8;
 
     const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
     rect.setAttribute("x", String(x));
     rect.setAttribute("y", String(y));
     rect.setAttribute("width", String(actualBarWidth));
     rect.setAttribute("height", String(barHeight));
-    rect.setAttribute("fill", color);
-    rect.setAttribute("rx", "4");
-    rect.style.cursor = "pointer";
-    rect.setAttribute("data-date", dates[index] || "");
+    rect.setAttribute("class", "chart-bar");
+    rect.setAttribute("rx", String(Math.min(4, actualBarWidth / 3)));
+    rect.setAttribute("data-date", chartBars[index].date);
     rect.setAttribute("data-hours", String(value));
-    rect.addEventListener("mouseenter", (e) =>
-      showChartTooltip(
-        e,
-        dates[index] || "",
-        value,
-        isWeeklyView ? weeklyEndDates?.[index] : undefined,
-      ),
-    );
-    rect.addEventListener("mouseleave", hideChartTooltip);
-    svg.appendChild(rect);
+    bars.push(rect);
+    // Bars grow in staggered from left to right.
+    const slot = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    slot.setAttribute("class", "chart-bar-slot");
+    slot.style.animationDelay = `${60 + Math.round((index / data.length) * 550)}ms`;
+    slot.appendChild(rect);
+    barGroup.appendChild(slot);
 
     if (isWeeklyView) {
-      const referenceHours = weeklyReferenceHours?.[index] ?? 0;
+      const referenceHours = chartBars[index].detail.target;
       if (referenceHours > 0) {
         const yReference = padding.top + chartHeight - (referenceHours / leftMax) * chartHeight;
         const referenceLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
@@ -752,24 +1152,24 @@ function createBarChart(
         referenceLine.setAttribute("y1", String(yReference));
         referenceLine.setAttribute("x2", String(x + actualBarWidth));
         referenceLine.setAttribute("y2", String(yReference));
-        referenceLine.setAttribute("stroke", "#666");
-        referenceLine.setAttribute("stroke-width", "1.5");
-        referenceLine.setAttribute("stroke-dasharray", "4 4");
-        referenceLine.setAttribute("opacity", "0.75");
-        svg.appendChild(referenceLine);
+        referenceLine.setAttribute("class", "chart-target");
+        // Fades in while its bar is halfway through growing in.
+        referenceLine.style.animationDelay = `${460 + Math.round((index / data.length) * 550)}ms`;
+        targetGroup.appendChild(referenceLine);
       }
     }
 
     // X-axis labels
     const labelX = x + actualBarWidth / 2;
-    if (labels[index] && labelX - lastLabelX >= minLabelSpacing) {
+    const label = chartBars[index].label;
+    const labelInView = labelX >= padding.left && labelX <= padding.left + chartWidth;
+    if (label && labelInView && labelX - lastLabelX >= minLabelSpacing) {
       const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
       text.setAttribute("x", String(labelX));
-      text.setAttribute("y", String(padding.top + chartHeight + 15));
+      text.setAttribute("y", String(padding.top + chartHeight + 16));
       text.setAttribute("text-anchor", "middle");
-      text.setAttribute("font-size", "12");
-      text.setAttribute("fill", "#666");
-      text.textContent = labels[index];
+      text.setAttribute("class", "chart-axis-label");
+      text.textContent = label;
       svg.appendChild(text);
       lastLabelX = labelX;
     }
@@ -783,11 +1183,8 @@ function createBarChart(
     referenceLine.setAttribute("y1", String(yReference));
     referenceLine.setAttribute("x2", String(padding.left + chartWidth));
     referenceLine.setAttribute("y2", String(yReference));
-    referenceLine.setAttribute("stroke", "#666");
-    referenceLine.setAttribute("stroke-width", "1.5");
-    referenceLine.setAttribute("stroke-dasharray", "4 4");
-    referenceLine.setAttribute("opacity", "0.75");
-    svg.appendChild(referenceLine);
+    referenceLine.setAttribute("class", "chart-target");
+    plot.appendChild(referenceLine);
   }
 
   // Draw cumulative overtime line (right Y axis scale)
@@ -795,11 +1192,15 @@ function createBarChart(
     const points: Array<{ x: number; y: number }> = [];
 
     cumulativeData.forEach((value, index) => {
-      const x = padding.left + index * barWidth + barWidth / 2;
+      const x = slotCenter(index);
       const normalized = (value - cumulativeMin) / cumulativeRange;
       const y = padding.top + chartHeight - normalized * chartHeight;
       points.push({ x, y });
     });
+    // Run the line across the full width of the outer bars, e.g. to the end of the last week.
+    points.unshift({ x: slotX(0), y: points[0].y });
+    const lastIndex = chartBars.length - 1;
+    points.push({ x: slotX(lastIndex) + slotWidth(lastIndex), y: points[points.length - 1].y });
 
     const zeroNormalized = (0 - cumulativeMin) / cumulativeRange;
     const yZero = padding.top + chartHeight - zeroNormalized * chartHeight;
@@ -808,20 +1209,40 @@ function createBarChart(
     zeroLine.setAttribute("y1", String(yZero));
     zeroLine.setAttribute("x2", String(padding.left + chartWidth));
     zeroLine.setAttribute("y2", String(yZero));
-    zeroLine.setAttribute("stroke", "#1f6fd1");
-    zeroLine.setAttribute("stroke-width", "1.5");
-    zeroLine.setAttribute("stroke-dasharray", "4 4");
-    zeroLine.setAttribute("opacity", "0.75");
-    svg.appendChild(zeroLine);
+    zeroLine.setAttribute("class", "chart-zero");
+    plot.appendChild(zeroLine);
+
+    // Shade the area between the balance and zero: green above, red below.
+    const linePath = buildSmoothPath(points);
+    const areaPath = `${linePath} L ${points[points.length - 1].x} ${yZero} L ${points[0].x} ${yZero} Z`;
+    const clipTop = padding.top - 10;
+    const clipBottom = padding.top + chartHeight + 10;
+    for (const [sign, y, h] of [
+      ["positive", clipTop, yZero - clipTop],
+      ["negative", yZero, clipBottom - yZero],
+    ] as const) {
+      const clipId = `balance-clip-${sign}`;
+      const clipPath = document.createElementNS("http://www.w3.org/2000/svg", "clipPath");
+      clipPath.setAttribute("id", clipId);
+      const clipRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      clipRect.setAttribute("x", "0");
+      clipRect.setAttribute("y", String(y));
+      clipRect.setAttribute("width", String(width));
+      clipRect.setAttribute("height", String(Math.max(0, h)));
+      clipPath.appendChild(clipRect);
+      plot.appendChild(clipPath);
+
+      const area = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      area.setAttribute("d", areaPath);
+      area.setAttribute("class", `chart-area--${sign}`);
+      area.setAttribute("clip-path", `url(#${clipId})`);
+      plot.appendChild(area);
+    }
 
     const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    line.setAttribute("d", buildSmoothPath(points));
-    line.setAttribute("stroke", "#0057d8");
-    line.setAttribute("stroke-width", "3.5");
-    line.setAttribute("fill", "none");
-    line.setAttribute("stroke-linecap", "round");
-    line.setAttribute("stroke-linejoin", "round");
-    svg.appendChild(line);
+    line.setAttribute("d", linePath);
+    line.setAttribute("class", "chart-balance");
+    plot.appendChild(line);
 
     // Right Y-axis integer labels — always includes 0.
     for (let v = cumulativeMin; v <= cumulativeMax; v += rightStep) {
@@ -830,8 +1251,7 @@ function createBarChart(
       text.setAttribute("x", String(padding.left + chartWidth + 10));
       text.setAttribute("y", String(y + 5));
       text.setAttribute("text-anchor", "start");
-      text.setAttribute("font-size", "12");
-      text.setAttribute("fill", "#0057d8");
+      text.setAttribute("class", "chart-axis-label chart-axis-label--balance");
       text.textContent = String(Math.round(v));
       svg.appendChild(text);
     }
@@ -843,8 +1263,7 @@ function createBarChart(
   yAxis.setAttribute("y1", String(padding.top));
   yAxis.setAttribute("x2", String(padding.left));
   yAxis.setAttribute("y2", String(padding.top + chartHeight));
-  yAxis.setAttribute("stroke", "#333");
-  yAxis.setAttribute("stroke-width", "1");
+  yAxis.setAttribute("class", "chart-axis");
   svg.appendChild(yAxis);
 
   const rightAxis = document.createElementNS("http://www.w3.org/2000/svg", "line");
@@ -852,33 +1271,125 @@ function createBarChart(
   rightAxis.setAttribute("y1", String(padding.top));
   rightAxis.setAttribute("x2", String(padding.left + chartWidth));
   rightAxis.setAttribute("y2", String(padding.top + chartHeight));
-  rightAxis.setAttribute("stroke", "#1f6fd1");
-  rightAxis.setAttribute("stroke-width", "1");
+  rightAxis.setAttribute("class", "chart-axis");
   svg.appendChild(rightAxis);
+
+  // One tooltip that follows the cursor; hovering anywhere in a bar's column selects it.
+
+  // Thin scroll indicator along the x-axis while zoomed in.
+  if (focusRange && lastFilledData.length > 0) {
+    const total = lastFilledData.length;
+    const trackY = padding.top + chartHeight + 1;
+    const track = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    track.setAttribute("class", "chart-scrollbar-track");
+    track.setAttribute("x", String(padding.left));
+    track.setAttribute("y", String(trackY));
+    track.setAttribute("width", String(chartWidth));
+    track.setAttribute("height", "3");
+    track.setAttribute("rx", "1.5");
+    svg.appendChild(track);
+    const thumb = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    thumb.setAttribute("class", "chart-scrollbar-thumb");
+    thumb.setAttribute("x", String(padding.left + (focusRange.start / total) * chartWidth));
+    thumb.setAttribute("y", String(trackY));
+    thumb.setAttribute(
+      "width",
+      String(Math.max(12, ((focusRange.end - focusRange.start + 1) / total) * chartWidth)),
+    );
+    thumb.setAttribute("height", "3");
+    thumb.setAttribute("rx", "1.5");
+    svg.appendChild(thumb);
+  }
+
+  let hoveredIndex: number | null = null;
+  const clearHover = () => {
+    if (hoveredIndex !== null) bars[hoveredIndex]?.classList.remove("is-hovered");
+    hoveredIndex = null;
+    hideChartTooltip();
+  };
+
+  svg.addEventListener("pointermove", (event) => {
+    if (event.buttons !== 0) {
+      clearHover(); // dragging pans the chart
+      return;
+    }
+    const box = svg.getBoundingClientRect();
+    const day = firstDay + (event.clientX - box.left - padding.left) / dayWidth;
+    const inPlot = day >= firstDay && day < firstDay + dayCount;
+    const index = chartBars.findIndex((bar) => day >= bar.start && day < bar.start + bar.span);
+    if (!inPlot || index < 0) {
+      clearHover();
+      return;
+    }
+    if (index !== hoveredIndex) {
+      if (hoveredIndex !== null) bars[hoveredIndex]?.classList.remove("is-hovered");
+      bars[index].classList.add("is-hovered");
+      hoveredIndex = index;
+
+      const balance = cumulativeData[index];
+      showChartTooltip({
+        date: chartBars[index].date,
+        endDate: chartBars[index].endDate,
+        hours: data[index],
+        balance,
+        detail: chartBars[index].detail,
+      });
+    }
+    moveChartTooltip(event.clientX, event.clientY);
+  });
+  svg.addEventListener("pointerleave", clearHover);
+  svg.addEventListener("pointerdown", clearHover);
 
   return svg;
 }
 
+/** Monotone cubic curve through every point; it never overshoots the data. */
 function buildSmoothPath(points: Array<{ x: number; y: number }>): string {
-  if (points.length === 0) {
-    return "";
-  }
-
-  if (points.length === 1) {
-    return `M ${points[0].x} ${points[0].y}`;
-  }
+  if (points.length === 0) return "";
+  const n = points.length;
+  const slope = (i: number) => {
+    const h = points[i + 1].x - points[i].x;
+    return h === 0 ? 0 : (points[i + 1].y - points[i].y) / h;
+  };
+  const tangents = points.map((_, i) => {
+    if (n === 1) return 0;
+    if (i === 0) return slope(0);
+    if (i === n - 1) return slope(n - 2);
+    const h0 = points[i].x - points[i - 1].x;
+    const h1 = points[i + 1].x - points[i].x;
+    const s0 = slope(i - 1);
+    const s1 = slope(i);
+    const p = (s0 * h1 + s1 * h0) / (h0 + h1 || 1);
+    return (
+      (Math.sign(s0) + Math.sign(s1)) * Math.min(Math.abs(s0), Math.abs(s1), 0.5 * Math.abs(p))
+    );
+  });
 
   let path = `M ${points[0].x} ${points[0].y}`;
-  for (let i = 1; i < points.length - 1; i += 1) {
-    const next = points[i + 1];
-    const xc = (points[i].x + next.x) / 2;
-    const yc = (points[i].y + next.y) / 2;
-    path += ` Q ${points[i].x} ${points[i].y} ${xc} ${yc}`;
+  for (let i = 0; i < n - 1; i++) {
+    const from = points[i];
+    const to = points[i + 1];
+    const third = (to.x - from.x) / 3;
+    path += ` C ${from.x + third} ${from.y + tangents[i] * third} ${to.x - third} ${to.y - tangents[i + 1] * third} ${to.x} ${to.y}`;
   }
-
-  const last = points[points.length - 1];
-  path += ` T ${last.x} ${last.y}`;
   return path;
+}
+
+function padToWeekEnd(days: OvertimeData["dailyData"]): OvertimeData["dailyData"] {
+  const last = days[days.length - 1];
+  if (!last) return days;
+  const result = [...days];
+  const cursor = new Date(last.date + "T00:00:00");
+  while (cursor.getDay() !== 0) {
+    cursor.setDate(cursor.getDate() + 1);
+    result.push({
+      date: formatIsoDate(cursor),
+      actualHours: 0,
+      expectedHours: 0,
+      cumulativeOvertimeHours: last.cumulativeOvertimeHours,
+    });
+  }
+  return result;
 }
 
 function fillMissingDays(dailyData: OvertimeData["dailyData"]): OvertimeData["dailyData"] {
@@ -928,77 +1439,130 @@ function formatIsoDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-let activeTooltip: HTMLElement | null = null;
+type BarDetail = { target: number; isWeekend?: boolean; daysWorked?: number };
 
-function formatHoursToHoursAndMinutes(hours: number): string {
-  const wholeHours = Math.floor(hours);
-  const minutes = Math.round((hours - wholeHours) * 60);
-  return `${wholeHours}h ${minutes}min`;
+function isWeekend(isoDate: string): boolean {
+  const day = new Date(isoDate + "T00:00:00").getDay();
+  return day === 0 || day === 6;
 }
 
-function showChartTooltip(event: MouseEvent, dateStr: string, hours: number, endDate?: string) {
-  // Remove existing tooltip
-  if (activeTooltip) {
-    activeTooltip.remove();
-  }
+// Only weekdays with tracked time count towards the target, like in the overtime calculation.
+function dayTarget(day: OvertimeData["dailyData"][number]): number {
+  return day.actualHours > 0 && !isWeekend(day.date) ? 8 : 0;
+}
 
-  const tooltip = document.createElement("div");
-  tooltip.style.cssText = `
-      position: fixed;
-      background: #333;
-      color: #fff;
-      padding: 8px 12px;
-      border-radius: 6px;
-      font-size: 12px;
-      pointer-events: none;
-      z-index: 1000;
-      white-space: nowrap;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-      user-select: none;
-    `;
+function formatHoursToHoursAndMinutes(hours: number): string {
+  const totalMinutes = Math.round(Math.abs(hours) * 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h === 0) return `${m}min`;
+  return m === 0 ? `${h}h` : `${h}h ${m}min`;
+}
+
+let tooltipElement: HTMLDivElement | null = null;
+
+function showChartTooltip({
+  date: dateStr,
+  endDate,
+  hours,
+  balance,
+  detail,
+}: {
+  date: string;
+  endDate?: string;
+  hours: number;
+  balance?: number;
+  detail?: BarDetail;
+}) {
+  if (!tooltipElement) {
+    tooltipElement = document.createElement("div");
+    tooltipElement.className = "chart-tooltip";
+    document.body.appendChild(tooltipElement);
+  }
+  const tooltip = tooltipElement;
+  tooltip.replaceChildren();
 
   let displayDate = "";
   if (endDate) {
-    // For weekly view: show date range
-    const startDateObj = dateStr ? new Date(dateStr) : null;
-    const endDateObj = endDate ? new Date(endDate) : null;
-    if (startDateObj && endDateObj) {
-      const startFormatted = startDateObj.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      });
-      const endFormatted = endDateObj.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      });
-      displayDate = `${startFormatted} - ${endFormatted}`;
-    }
-  } else {
-    // For daily view: show single date
-    displayDate = dateStr
-      ? new Date(dateStr).toLocaleDateString("en-US", {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-        })
-      : "";
+    const fmt = (iso: string) =>
+      new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    displayDate = `${fmt(dateStr)} – ${fmt(endDate)}`;
+  } else if (dateStr) {
+    displayDate = new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
   }
 
-  tooltip.textContent = `${displayDate}: ${formatHoursToHoursAndMinutes(hours)}`;
-  document.body.appendChild(tooltip);
+  const dateLine = document.createElement("div");
+  dateLine.className = "chart-tooltip-date";
+  dateLine.textContent = displayDate;
+  const valueLine = document.createElement("div");
+  valueLine.className = "chart-tooltip-value";
+  valueLine.textContent =
+    hours > 0 ? `${formatHoursToHoursAndMinutes(hours)} worked` : "No time tracked";
+  tooltip.append(dateLine, valueLine);
 
-  // Position tooltip above the bars
-  const rect = (event.target as Element).getBoundingClientRect();
-  const tooltipRect = tooltip.getBoundingClientRect();
-  tooltip.style.left = rect.left + rect.width / 2 - tooltipRect.width / 2 + "px";
-  tooltip.style.top = rect.top - 30 + "px";
+  if (detail && hours > 0) {
+    const meta: string[] = [];
+    if (detail.target > 0) {
+      meta.push(`Target ${formatHoursToHoursAndMinutes(detail.target)}`);
+    } else if (detail.isWeekend) {
+      meta.push("Weekend, no target");
+    }
+    if (detail.daysWorked !== undefined) {
+      meta.push(`${detail.daysWorked} ${detail.daysWorked === 1 ? "day" : "days"} worked`);
+    }
 
-  activeTooltip = tooltip;
+    const metaLine = document.createElement("div");
+    metaLine.className = "chart-tooltip-meta";
+    metaLine.textContent = meta.join(" · ");
+
+    const diff = hours - detail.target;
+    const diffMinutes = Math.round(diff * 60);
+    const diffBadge = document.createElement("span");
+    diffBadge.className = `chart-tooltip-diff ${diffMinutes > 0 ? "is-positive" : diffMinutes < 0 ? "is-negative" : ""}`;
+    diffBadge.textContent =
+      diffMinutes === 0
+        ? "±0"
+        : `${diffMinutes > 0 ? "+" : "−"}${formatHoursToHoursAndMinutes(diff)}`;
+    valueLine.append(diffBadge);
+    if (meta.length > 0) tooltip.append(metaLine);
+  } else if (hours === 0) {
+    const metaLine = document.createElement("div");
+    metaLine.className = "chart-tooltip-meta";
+    metaLine.textContent = "Doesn't count towards the target";
+    tooltip.append(metaLine);
+  }
+
+  if (balance !== undefined) {
+    const balanceMinutes = Math.round(balance * 60);
+    const balanceLine = document.createElement("div");
+    balanceLine.className = "chart-tooltip-balance";
+    const label = document.createElement("span");
+    label.textContent = endDate ? "Balance at week end" : "Balance";
+    const value = document.createElement("span");
+    value.className = balanceMinutes > 0 ? "is-positive" : balanceMinutes < 0 ? "is-negative" : "";
+    value.textContent = `${balanceMinutes < 0 ? "−" : "+"}${formatHoursToHoursAndMinutes(balance)}`;
+    balanceLine.append(label, value);
+    tooltip.append(balanceLine);
+  }
+
+  tooltip.classList.add("is-visible");
+}
+
+function moveChartTooltip(clientX: number, clientY: number) {
+  if (!tooltipElement) return;
+  const offset = 14;
+  const { width, height } = tooltipElement.getBoundingClientRect();
+  let left = clientX + offset;
+  if (left + width > window.innerWidth - 8) left = clientX - offset - width;
+  const top = Math.min(Math.max(8, clientY - height - offset), window.innerHeight - height - 8);
+  tooltipElement.style.left = `${Math.max(8, left)}px`;
+  tooltipElement.style.top = `${top}px`;
 }
 
 function hideChartTooltip() {
-  if (activeTooltip) {
-    activeTooltip.remove();
-    activeTooltip = null;
-  }
+  tooltipElement?.classList.remove("is-visible");
 }

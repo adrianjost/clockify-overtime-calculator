@@ -16,6 +16,7 @@ export type AppRequests = {
     response: OvertimeData;
   };
   closeApp: { params: {}; response: void };
+  setContentMaxHeight: { params: { height: number }; response: void };
   getLaunchAtLogin: { params: {}; response: { enabled: boolean } };
   setLaunchAtLogin: { params: { enabled: boolean }; response: void };
   getTrayEnabled: { params: {}; response: { enabled: boolean } };
