@@ -1,20 +1,18 @@
 {
   "name": "clockify-overtime",
   "version": "0.1.0",
-  "description": "Native macOS desktop app for Clockify overtime analysis",
+  "private": true,
+  "description": "Native macOS menu bar app for Clockify overtime analysis",
   "scripts": {
-    "setup": "bun install && bash scripts/setup-hooks.sh && bun run generate-icons",
-    "start": "electrobun dev",
-    "dev": "electrobun dev --watch",
+    "setup": "bun install && bash scripts/setup-hooks.sh",
+    "build": "xcodebuild -project macos/ClockifyOvertime.xcodeproj -scheme ClockifyOvertime -configuration Release -derivedDataPath build/DerivedData build",
     "format": "oxfmt --write",
+    "typecheck": "tsc --noEmit -p .",
     "generate-icons": "bun scripts/generate-icons.ts"
-  },
-  "dependencies": {
-    "electrobun": "^1.18.1",
-    "temporal-polyfill": "^0.2.5"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "oxfmt": "^0.42.0"
+    "oxfmt": "^0.42.0",
+    "typescript": "^5.9.3"
   }
 }
