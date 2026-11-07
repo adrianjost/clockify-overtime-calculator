@@ -102,14 +102,14 @@ export function initializeSettings(onSettingsSaved: () => void, onCancel?: () =>
         hasStoredApiKey = true;
         applyAuthVisibility();
         saveStatus.textContent = "✓ Saved";
-        saveStatus.style.color = "#0e7c66";
+        saveStatus.className = "save-status is-success";
         setTimeout(() => {
           saveStatus.textContent = "";
         }, 1000);
       } catch (err) {
         console.error("setStoredApiKey failed:", err);
         saveStatus.textContent = "Failed to save API key";
-        saveStatus.style.color = "#b42318";
+        saveStatus.className = "save-status is-error";
         setTimeout(() => {
           saveStatus.textContent = "";
         }, 2000);
@@ -125,11 +125,11 @@ export function initializeSettings(onSettingsSaved: () => void, onCancel?: () =>
     resetBtn.addEventListener("click", async () => {
       if (!confirmPending) {
         confirmPending = true;
-        resetBtn.textContent = "Click again to confirm";
+        resetBtn.textContent = "Click again to reset";
         resetBtn.classList.add("btn-danger-confirm");
         confirmTimer = setTimeout(() => {
           confirmPending = false;
-          resetBtn.textContent = "Reset all stored data";
+          resetBtn.textContent = "Reset…";
           resetBtn.classList.remove("btn-danger-confirm");
         }, 3000);
         return;

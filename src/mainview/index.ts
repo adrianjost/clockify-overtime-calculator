@@ -13,7 +13,7 @@ if (!settingsContainer || !dashboardContainer) {
 
 // Navigation functions
 const showSettings = () => {
-  settingsContainer.style.display = "block";
+  settingsContainer.style.removeProperty("display");
   dashboardContainer.style.display = "none";
 };
 
@@ -33,6 +33,11 @@ const handleNavigation = () => {
 };
 
 window.addEventListener("hashchange", handleNavigation);
+
+const settingsScroll = settingsContainer.querySelector<HTMLElement>(".settings-scroll");
+settingsScroll?.addEventListener("scroll", () => {
+  settingsContainer.classList.toggle("is-scrolled", settingsScroll.scrollTop > 0);
+});
 handleNavigation();
 
 try {
