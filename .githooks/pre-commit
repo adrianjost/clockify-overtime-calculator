@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# Pre-commit hook to format code via the project formatter script
+
+set -e
+
+# Get the list of staged files
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx|json|css|html|md)$' || true)
+
+if [ -z "$STAGED_FILES" ]; then
+  exit 0
+fi
+
+# Run project formatter
+echo "Formatting source with bun run format..."
+bun run format
+
+# Re-add the formatted files to the staging area
+echo "Re-staging formatted files..."
+git add $STAGED_FILES
+
+echo "✓ Code formatting complete"
