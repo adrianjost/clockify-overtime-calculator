@@ -142,6 +142,14 @@ The server also hosts a mobile web page at its address (e.g. `http://192.168.1.1
 start and stop the timer, add, edit and delete entries, and see your overtime balance for a range and
 for the current week. On iOS, use Share → Add to Home Screen to open it like an app.
 
+### Move your entries from Clockify
+
+Each user can copy their Clockify history to the server themselves: on the web page, tap "Import from
+Clockify" at the bottom and paste a Clockify API key. The server copies all finished entries from your
+default Clockify workspace. It skips entries that overlap one already on the server, so importing twice
+adds nothing, and it doesn't import a running Clockify timer. The key is only used for the import and
+not stored. The server needs internet access to reach Clockify.
+
 ### Connect the app
 
 In Settings → Self-hosted time tracking, enter the server address (e.g. `http://192.168.1.10:8787`),
@@ -177,6 +185,7 @@ need it as `Authorization: Bearer <token>`. Times are ISO 8601.
 | `DELETE /api/entries/:id`                        | Delete an entry                      |
 | `GET /api/timer`                                 | The running entry, if any            |
 | `POST /api/timer/start` / `POST /api/timer/stop` | Start or stop the timer              |
+| `POST /api/import/clockify` `{apiKey}`           | Copy entries from Clockify           |
 
 ## Signing and distribution
 

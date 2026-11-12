@@ -130,8 +130,27 @@ body.web {
 
 .web-footer {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
+  color: var(--text-secondary);
+}
+
+.web-footer-import {
+  flex-basis: 100%;
+}
+
+.import-hint {
+  margin: 0 0 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.import-hint + .entry-error {
+  margin-top: 0;
+}
+
+.entry-error.is-success {
   color: var(--text-secondary);
 }
 

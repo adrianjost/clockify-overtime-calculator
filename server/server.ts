@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 
 const port = Number(process.env.PORT ?? 8080);
 const dbPath = process.env.DB_PATH ?? "/data/time-tracking.db";
+const clockifyUrl = process.env.CLOCKIFY_API_URL ?? "https://api.clockify.me/api/v1";
 // The mobile web UI, built from src/web (see Dockerfile).
 const publicDir = process.env.PUBLIC_DIR ?? `${import.meta.dir}/public`;
 
@@ -84,6 +85,9 @@ const entries = {
     "UPDATE entries SET start = $start, end = $end, updated_at = $updated_at WHERE id = $id AND user_id = $user_id",
   ),
   remove: db.query("DELETE FROM entries WHERE id = $id AND user_id = $user_id"),
+  overlapping: db.query<{ id: string }, { user_id: string; start: string; end: string }>(
+    "SELECT id FROM entries WHERE user_id = $user_id AND start < $end AND (end IS NULL OR end > $start) LIMIT 1",
+  ),
 };
 
 // ─── User management (CLI) ──────────────────────────────────────────────────
@@ -201,6 +205,64 @@ async function login(request: Request) {
   return { token, username: user.username };
 }
 
+// ─── Clockify import ─────────────────────────────────────────────────────────
+
+type ClockifyEntry = { timeInterval: { start: string; end: string | null } };
+
+async function clockify<T>(path: string, apiKey: string): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${clockifyUrl}${path}`, {
+      headers: { "X-Api-Key": apiKey },
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch (error) {
+    throw new HttpError(502, `Clockify is unreachable: ${(error as Error).message}`);
+  }
+  if (response.status === 401 || response.status === 403) {
+    throw new HttpError(400, "Clockify did not accept the API key");
+  }
+  if (response.status === 429) {
+    throw new HttpError(429, "Clockify's rate limit is reached. Try again in an hour.");
+  }
+  if (!response.ok) throw new HttpError(502, `Clockify error (HTTP ${response.status})`);
+  return (await response.json()) as T;
+}
+
+/** Copies all finished Clockify entries that don't overlap an existing entry. */
+async function importFromClockify(user_id: string, apiKey: string) {
+  const pageSize = 5000;
+  const clockifyUser = await clockify<{ id: string; defaultWorkspace: string }>("/user", apiKey);
+  const found: ClockifyEntry[] = [];
+  for (let page = 1; ; page++) {
+    const batch = await clockify<ClockifyEntry[]>(
+      `/workspaces/${clockifyUser.defaultWorkspace}/user/${clockifyUser.id}/time-entries?page-size=${pageSize}&page=${page}`,
+      apiKey,
+    );
+    found.push(...batch);
+    if (batch.length < pageSize) break;
+  }
+
+  const result = { imported: 0, skipped: 0, running: 0 };
+  db.transaction(() => {
+    for (const { timeInterval } of found) {
+      if (!timeInterval.end) {
+        result.running++;
+        continue;
+      }
+      const start = new Date(timeInterval.start).toISOString();
+      const end = new Date(timeInterval.end).toISOString();
+      if (end <= start || entries.overlapping.get({ user_id, start, end })) {
+        result.skipped++;
+        continue;
+      }
+      entries.insert.run({ id: crypto.randomUUID(), user_id, start, end, updated_at: now() });
+      result.imported++;
+    }
+  })();
+  return result;
+}
+
 function timerApi(user: User) {
   const user_id = user.id;
 
@@ -273,6 +335,13 @@ function timerApi(user: User) {
       const running = entries.running.get({ user_id });
       if (!running) throw new HttpError(409, "No timer is running");
       return save({ id: running.id, start: running.start, end: now() });
+    },
+    "POST /api/import/clockify": async (request) => {
+      const { apiKey } = await body(request);
+      if (typeof apiKey !== "string" || !apiKey.trim()) {
+        throw new HttpError(400, "apiKey is required");
+      }
+      return importFromClockify(user_id, apiKey.trim());
     },
   };
   return routes;
