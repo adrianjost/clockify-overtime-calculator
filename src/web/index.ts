@@ -30,19 +30,67 @@ function token(): string {
   }
 }
 
-async function api<T>(method: string, path: string, body?: unknown, auth = token()): Promise<T> {
-  const response = await fetch(path, {
+function request(
+  method: string,
+  path: string,
+  body?: unknown,
+  auth = token(),
+  signal?: AbortSignal,
+) {
+  return fetch(path, {
     method,
     headers: { authorization: `Bearer ${auth}`, "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal,
   });
+}
+
+async function api<T>(method: string, path: string, body?: unknown, auth = token()): Promise<T> {
+  const response = await request(method, path, body, auth);
   const text = await response.text();
   const json = text ? JSON.parse(text) : null;
-  if (response.status === 401) {
-    throw new Unauthorized(json?.error === "Unauthorized" ? "Please sign in again." : json?.error);
-  }
-  if (!response.ok) throw new Error(json?.error ?? `Server error (HTTP ${response.status})`);
+  if (!response.ok) throw failure(response.status, json?.error);
   return json as T;
+}
+
+function failure(status: number, error?: string): Error {
+  if (status === 401) {
+    return new Unauthorized(error === "Unauthorized" ? "Please sign in again." : error);
+  }
+  return new Error(error ?? `Server error (HTTP ${status})`);
+}
+
+type ImportResult = { imported: number; skipped: number; running: number };
+
+/** The server streams one JSON object per line: progress messages, then the result or an error. */
+async function importFromClockify(
+  apiKey: string,
+  onProgress: (message: string) => void,
+  signal: AbortSignal,
+): Promise<ImportResult> {
+  const response = await request("POST", "/api/import/clockify", { apiKey }, token(), signal);
+  if (!response.ok || !response.body) {
+    const json = await response.json().catch(() => null);
+    throw failure(response.status, json?.error);
+  }
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += value;
+    let newline: number;
+    while ((newline = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, newline);
+      buffer = buffer.slice(newline + 1);
+      if (!line) continue;
+      const message = JSON.parse(line);
+      if (message.error) throw new Error(message.error);
+      if (message.result) return message.result as ImportResult;
+      if (message.progress) onProgress(message.progress);
+    }
+  }
+  throw new Error("The connection to the server was lost. Try again.");
 }
 
 function rangeQuery(startDate: string, endDate: string): string {
@@ -144,18 +192,21 @@ document.querySelector("#import-open")!.addEventListener("click", () => {
   importResult.classList.remove("is-success");
   importDialog.showModal();
 });
+let importRun: AbortController | null = null;
 document.querySelector("#import-cancel")!.addEventListener("click", () => importDialog.close());
+importDialog.addEventListener("close", () => importRun?.abort());
 document.querySelector("#import-form")!.addEventListener("submit", async (event) => {
   event.preventDefault();
   importSubmit.disabled = true;
   importResult.classList.add("is-success");
   importResult.textContent = "Importing…";
+  const run = (importRun = new AbortController());
   try {
-    const { imported, skipped, running } = await api<{
-      imported: number;
-      skipped: number;
-      running: number;
-    }>("POST", "/api/import/clockify", { apiKey: importKey.value });
+    const { imported, skipped, running } = await importFromClockify(
+      importKey.value,
+      (message) => (importResult.textContent = message),
+      run.signal,
+    );
     importKey.value = "";
     importResult.textContent =
       `Imported ${imported} ${imported === 1 ? "entry" : "entries"}` +
@@ -163,6 +214,7 @@ document.querySelector("#import-form")!.addEventListener("submit", async (event)
       (running ? ". A running Clockify timer was not imported." : ".");
     window.dispatchEvent(new Event("tracking-changed"));
   } catch (error) {
+    if (run.signal.aborted) return;
     if (error instanceof Unauthorized) {
       importDialog.close();
       signOut(error.message);
@@ -171,6 +223,7 @@ document.querySelector("#import-form")!.addEventListener("submit", async (event)
     importResult.classList.remove("is-success");
     importResult.textContent = error instanceof Error ? error.message : String(error);
   } finally {
+    if (importRun === run) importRun = null;
     importSubmit.disabled = false;
   }
 });
