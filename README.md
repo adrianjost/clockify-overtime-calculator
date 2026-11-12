@@ -85,23 +85,37 @@ and keep the entries on your own server, for example a NAS. Then you don't need 
 
 ### Run the server
 
-Clone the repo on the machine (the image is built from it), then:
+You only need Docker and the Compose file, not the repo. On the machine:
 
 ```sh
-cd server
-docker compose up -d --build
+mkdir time-tracking && cd time-tracking
+curl -fsSLO https://raw.githubusercontent.com/adrianjost/clockify-overtime-calculator/main/server/docker-compose.yml
+docker compose up -d
 ```
 
-The server listens on port 8787 and stores everything in one SQLite file, `server/data/time-tracking.db`.
-Back up that folder to back up your entries. To update, pull the latest changes and run
-`docker compose up -d --build` again.
+This runs the prebuilt image `ghcr.io/adrianjost/clockify-overtime-calculator-server` (for x86 and
+ARM). It is rebuilt on every change to `main`. On a NAS you can also paste the Compose file into its
+container manager.
+
+The server listens on port 8787 and stores everything in one SQLite file, `data/time-tracking.db`
+next to the Compose file. Back up that folder to back up your entries. To update:
+
+```sh
+docker compose pull && docker compose up -d
+```
+
+To build the image yourself instead, run this in the repo and then `docker compose up -d` as above:
+
+```sh
+docker build -f server/Dockerfile -t ghcr.io/adrianjost/clockify-overtime-calculator-server .
+```
 
 ### Accounts
 
 Nobody can sign up on their own: you create the accounts on the server. Each account has its own
 time entries and its own timer.
 
-To add an account, run this in the `server/` folder while the server is running:
+To add an account, run this in the folder with the Compose file while the server is running:
 
 ```sh
 docker compose exec time-tracking bun server.ts user add <name>

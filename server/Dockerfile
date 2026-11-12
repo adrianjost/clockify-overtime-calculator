@@ -1,5 +1,7 @@
-# Build context is the repository root (see docker-compose.yml).
-FROM oven/bun:1-alpine AS web
+# Build context is the repository root:
+#   docker build -f server/Dockerfile -t ghcr.io/adrianjost/clockify-overtime-calculator-server .
+# The web page is the same on every platform, so it is built natively.
+FROM --platform=$BUILDPLATFORM oven/bun:1-alpine AS web
 WORKDIR /src
 COPY src ./src
 COPY macos/ClockifyOvertime/Assets.xcassets/AppIcon.appiconset/icon_256x256@2x.png ./icon.png

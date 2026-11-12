@@ -1,8 +1,6 @@
 services:
   time-tracking:
-    build:
-      context: ..
-      dockerfile: server/Dockerfile
+    image: ghcr.io/adrianjost/clockify-overtime-calculator-server:latest
     restart: unless-stopped
     ports:
       - "8787:8080"
