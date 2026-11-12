@@ -97,6 +97,9 @@ const entries = {
     "UPDATE entries SET start = $start, end = $end, updated_at = $updated_at WHERE id = $id AND user_id = $user_id",
   ),
   remove: db.query("DELETE FROM entries WHERE id = $id AND user_id = $user_id"),
+  any: db.query<{ id: string }, { user_id: string }>(
+    "SELECT id FROM entries WHERE user_id = $user_id LIMIT 1",
+  ),
   clockifyIds: db.query<{ clockify_id: string }, { user_id: string }>(
     "SELECT clockify_id FROM entries WHERE user_id = $user_id AND clockify_id IS NOT NULL",
   ),
@@ -452,7 +455,10 @@ function timerApi(user: User) {
   }
 
   const routes: Record<string, (request: Request, id?: string) => unknown | Promise<unknown>> = {
-    "GET /api/me": () => ({ username: user.username }),
+    "GET /api/me": () => ({
+      username: user.username,
+      hasEntries: entries.any.get({ user_id }) !== null,
+    }),
     "POST /api/logout": (request) => {
       sessions.remove.run({ token_hash: hashToken(bearerToken(request)) });
       return null;
