@@ -657,6 +657,8 @@ button {
   position: relative;
   flex: 1;
   min-height: 0;
+  /* Vertical swipes scroll the page; pinches and horizontal swipes go to the chart. */
+  touch-action: pan-y;
 }
 
 .chart-plot {
