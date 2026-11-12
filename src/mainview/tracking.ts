@@ -34,7 +34,9 @@ function formatDuration(ms: number, withSeconds = false): string {
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
   const seconds = String(totalSeconds % 60).padStart(2, "0");
-  return withSeconds ? `${hours}:${minutes}:${seconds}` : `${hours}:${minutes}`;
+  if (!withSeconds) return `${hours}:${minutes}`;
+  // A running timer shows hours only once it has run for one.
+  return hours > 0 ? `${hours}:${minutes}:${seconds}` : `${Number(minutes)}:${seconds}`;
 }
 
 function entryMs(entry: TrackedEntry): number {
