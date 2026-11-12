@@ -131,11 +131,17 @@ struct TrackingServer {
     guard (200..<300).contains(http.statusCode) else {
       let message = (try? JSONDecoder().decode(ErrorBody.self, from: data))?.error
       if http.statusCode == 401 && message == "Unauthorized" {
-        throw ClockifyError(
-          message: "You were signed out of the time tracking server. Sign in again in Settings.")
+        throw SessionExpiredError()
       }
       throw ClockifyError(message: message ?? "Time tracking server error (HTTP \(http.statusCode))")
     }
     return data
+  }
+}
+
+/// The server no longer accepts the session, e.g. after a password or username change.
+struct SessionExpiredError: LocalizedError {
+  var errorDescription: String? {
+    "You were signed out of the time tracking server. Sign in again in Settings."
   }
 }

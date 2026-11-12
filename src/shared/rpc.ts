@@ -34,7 +34,13 @@ export type AppRequests = {
   setDataSource: { params: { dataSource: DataSource }; response: void };
   getServerSettings: {
     params: {};
-    response: { url: string | null; username: string | null; signedIn: boolean };
+    response: {
+      url: string | null;
+      username: string | null;
+      signedIn: boolean;
+      /** Why the session ended, until you sign in again. */
+      notice: string | null;
+    };
   };
   signInToServer: { params: { url: string; username: string; password: string }; response: void };
   signOutOfServer: { params: {}; response: void };

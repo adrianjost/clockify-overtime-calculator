@@ -142,6 +142,17 @@ export function initializeSettings(onSettingsSaved: () => void, onCancel?: () =>
     });
   }
 
+  window.addEventListener("tracking-changed", async () => {
+    try {
+      const setup = await bridge.getSetupState({});
+      isConfigured = setup.configured;
+      dataSource = setup.dataSource;
+      applyAuthVisibility();
+    } catch (err) {
+      console.error("getSetupState failed:", err);
+    }
+  });
+
   // Auto-save API key on input change
   apiKeyInput.addEventListener("change", async () => {
     const value = apiKeyInput.value.trim();
@@ -195,12 +206,17 @@ export function initializeSettings(onSettingsSaved: () => void, onCancel?: () =>
       serverStatus.className = `save-status ${isError ? "is-error" : "is-success"}`;
     };
 
-    void bridge.getServerSettings({}).then((settings) => {
+    const loadServerSettings = async () => {
+      const settings = await bridge.getServerSettings({});
       serverUrlInput.value = settings.url ?? "";
       serverUsernameInput.value = settings.username ?? "";
       signedIn = settings.signedIn;
+      if (settings.notice) showServerStatus(settings.notice, true);
       renderServer();
-    });
+    };
+    void loadServerSettings();
+    // The app reports a session the server rejected as a tracking change.
+    window.addEventListener("tracking-changed", () => void loadServerSettings());
 
     const submit = async () => {
       serverButton.disabled = true;
