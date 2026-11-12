@@ -163,3 +163,34 @@ body.web {
 .web code {
   font-size: 0.95em;
 }
+
+.import-sources {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.import-source {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 12px 14px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--group-bg);
+  box-shadow: var(--shadow);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.import-source-name {
+  font-weight: 600;
+}
+
+.import-source-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+}

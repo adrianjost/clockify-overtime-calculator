@@ -361,7 +361,23 @@ async function importFromClockify(
  * Runs the import while streaming one JSON object per line: `{progress}` every two seconds
  * (which also keeps the connection open), then `{result}` or `{error}`.
  */
-function streamImport(user_id: string, apiKey: string, requestSignal: AbortSignal): Response {
+type ImportResult = { imported: number; skipped: number; running: number };
+type ImportRun = (
+  user_id: string,
+  progress: Progress,
+  signal: AbortSignal,
+) => Promise<ImportResult>;
+
+/** Each import source checks its input before the import starts streaming. */
+const importers: Record<string, (input: Record<string, unknown>) => ImportRun> = {
+  clockify: (input) => {
+    const apiKey = typeof input.apiKey === "string" ? input.apiKey.trim() : "";
+    if (!apiKey) throw new HttpError(400, "apiKey is required");
+    return (user_id, progress, signal) => importFromClockify(user_id, apiKey, progress, signal);
+  },
+};
+
+function streamImport(user_id: string, run: ImportRun, requestSignal: AbortSignal): Response {
   const abort = new AbortController();
   requestSignal.addEventListener("abort", () => abort.abort());
   const encoder = new TextEncoder();
@@ -385,7 +401,7 @@ function streamImport(user_id: string, apiKey: string, requestSignal: AbortSigna
         sendProgress();
       };
       ticker = setInterval(sendProgress, 2000);
-      importFromClockify(user_id, apiKey, progress, abort.signal)
+      run(user_id, progress, abort.signal)
         .then((result) => send({ result }))
         .catch((error) => {
           if (abort.signal.aborted) return;
@@ -484,12 +500,10 @@ function timerApi(user: User) {
       if (!running) throw new HttpError(409, "No timer is running");
       return save({ id: running.id, start: running.start, end: now() });
     },
-    "POST /api/import/clockify": async (request) => {
-      const { apiKey } = await body(request);
-      if (typeof apiKey !== "string" || !apiKey.trim()) {
-        throw new HttpError(400, "apiKey is required");
-      }
-      return streamImport(user_id, apiKey.trim(), request.signal);
+    "POST /api/import/:source": async (request, source = "") => {
+      const importer = Object.hasOwn(importers, source) ? importers[source] : undefined;
+      if (!importer) throw new HttpError(404, "Unknown import source");
+      return streamImport(user_id, importer(await body(request)), request.signal);
     },
   };
   return routes;
@@ -499,10 +513,11 @@ async function handleApi(request: Request, pathname: string): Promise<unknown> {
   if (request.method === "POST" && pathname === "/api/login") return login(request);
   const user = authenticate(request);
   if (!user) throw new HttpError(401, "Unauthorized");
-  const match = pathname.match(/^\/api\/entries\/([^/]+)$/);
-  const handler = timerApi(user)[`${request.method} ${match ? "/api/entries/:id" : pathname}`];
+  const match = pathname.match(/^\/api\/(entries|import)\/([^/]+)$/);
+  const route = match ? `/api/${match[1]}/${match[1] === "entries" ? ":id" : ":source"}` : pathname;
+  const handler = timerApi(user)[`${request.method} ${route}`];
   if (!handler) throw new HttpError(404, "Not found");
-  return handler(request, match?.[1]);
+  return handler(request, match?.[2]);
 }
 
 // ─── HTTP ────────────────────────────────────────────────────────────────────
