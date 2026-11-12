@@ -133,6 +133,48 @@ document.querySelector("#sign-out")!.addEventListener("click", async () => {
   signOut();
 });
 
+const importDialog = document.querySelector<HTMLDialogElement>("#import-dialog")!;
+const importKey = document.querySelector<HTMLInputElement>("#import-key")!;
+const importResult = document.querySelector<HTMLParagraphElement>("#import-result")!;
+const importSubmit = document.querySelector<HTMLButtonElement>("#import-submit")!;
+
+document.querySelector("#import-open")!.addEventListener("click", () => {
+  importKey.value = "";
+  importResult.textContent = "";
+  importResult.classList.remove("is-success");
+  importDialog.showModal();
+});
+document.querySelector("#import-cancel")!.addEventListener("click", () => importDialog.close());
+document.querySelector("#import-form")!.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  importSubmit.disabled = true;
+  importResult.classList.remove("is-success");
+  importResult.textContent = "Importing…";
+  try {
+    const { imported, skipped, running } = await api<{
+      imported: number;
+      skipped: number;
+      running: number;
+    }>("POST", "/api/import/clockify", { apiKey: importKey.value });
+    importKey.value = "";
+    importResult.classList.add("is-success");
+    importResult.textContent =
+      `Imported ${imported} ${imported === 1 ? "entry" : "entries"}` +
+      (skipped ? `, skipped ${skipped} that overlap existing ones` : "") +
+      (running ? ". A running Clockify timer was not imported." : ".");
+    window.dispatchEvent(new Event("tracking-changed"));
+  } catch (error) {
+    if (error instanceof Unauthorized) {
+      importDialog.close();
+      signOut(error.message);
+      return;
+    }
+    importResult.textContent = error instanceof Error ? error.message : String(error);
+  } finally {
+    importSubmit.disabled = false;
+  }
+});
+
 let started = false;
 let refreshSummary = async () => {};
 
