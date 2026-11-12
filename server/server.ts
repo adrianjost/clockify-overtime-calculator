@@ -3,6 +3,8 @@ import { createHash, randomBytes } from "node:crypto";
 
 const port = Number(process.env.PORT ?? 8080);
 const dbPath = process.env.DB_PATH ?? "/data/time-tracking.db";
+// The mobile web UI, built from src/web (see Dockerfile).
+const publicDir = process.env.PUBLIC_DIR ?? `${import.meta.dir}/public`;
 
 // ─── Database ────────────────────────────────────────────────────────────────
 
@@ -288,6 +290,15 @@ async function handleApi(request: Request, pathname: string): Promise<unknown> {
 
 // ─── HTTP ────────────────────────────────────────────────────────────────────
 
+async function serveStatic(pathname: string): Promise<Response> {
+  const relative = pathname === "/" ? "index.html" : decodeURIComponent(pathname.slice(1));
+  const file = Bun.file(`${publicDir}/${relative}`);
+  if (relative.split("/").includes("..") || !(await file.exists())) {
+    return new Response("Not found", { status: 404 });
+  }
+  return new Response(file, { headers: { "cache-control": "no-cache" } });
+}
+
 function json(data: unknown, status = 200): Response {
   return new Response(data === null ? null : JSON.stringify(data), {
     status: data === null ? 204 : status,
@@ -300,6 +311,9 @@ Bun.serve({
   async fetch(request) {
     const { pathname } = new URL(request.url);
     if (pathname === "/health") return json({ ok: true });
+    if (!pathname.startsWith("/api/")) {
+      return request.method === "GET" ? serveStatic(pathname) : json({ error: "Not found" }, 404);
+    }
     try {
       return json(await handleApi(request, pathname));
     } catch (error) {

@@ -53,10 +53,13 @@ function dayHeading(day: string): string {
   });
 }
 
-/** Timer button, time entry list and entry editor; only active with a self-hosted server. */
-export function initializeTracking() {
+/**
+ * Timer button, time entry list and entry editor; only active with a self-hosted server.
+ * The web UI shows the list all the time instead of in the #entries view.
+ */
+export function initializeTracking({ alwaysShowEntries = false } = {}) {
   const timerButton = el<HTMLButtonElement>("#timer-button");
-  const entriesLink = el<HTMLAnchorElement>("#entries-link");
+  const entriesLink = document.querySelector<HTMLAnchorElement>("#entries-link");
   const list = el<HTMLDivElement>("#entries-list");
   const moreButton = el<HTMLButtonElement>("#entries-more");
   const dialog = el<HTMLDialogElement>("#entry-dialog");
@@ -85,7 +88,7 @@ export function initializeTracking() {
 
   function renderTimer() {
     timerButton.hidden = !enabled;
-    entriesLink.hidden = !enabled;
+    if (entriesLink) entriesLink.hidden = !enabled;
     timerButton.classList.toggle("is-running", running !== null);
     if (running) {
       const elapsed = formatDuration(Date.now() - Date.parse(running.start), true);
@@ -176,7 +179,7 @@ export function initializeTracking() {
     void loadEntries();
   });
   el<HTMLButtonElement>("#add-entry").addEventListener("click", () => openEditor(null));
-  el<HTMLButtonElement>("#entries-back").addEventListener("click", () => {
+  document.querySelector("#entries-back")?.addEventListener("click", () => {
     location.hash = "";
   });
 
@@ -194,11 +197,14 @@ export function initializeTracking() {
 
   function updateDuration() {
     const times = editedTimes();
-    durationLabel.textContent =
-      times?.end != null
-        ? formatDuration(times.end.getTime() - times.start.getTime()) +
-          (isoDate(times.end) !== isoDate(times.start) ? " (next day)" : "")
-        : "";
+    if (times && !times.end) {
+      durationLabel.textContent = editing?.end === null ? "Running" : "";
+      return;
+    }
+    durationLabel.textContent = times?.end
+      ? formatDuration(times.end.getTime() - times.start.getTime()) +
+        (isoDate(times.end) !== isoDate(times.start) ? " (next day)" : "")
+      : "";
   }
 
   function openEditor(entry: TrackedEntry | null) {
@@ -284,15 +290,15 @@ export function initializeTracking() {
       console.error("Loading the timer failed:", error);
     }
     renderTimer();
-    if (location.hash === "#entries") {
+    if (alwaysShowEntries || location.hash === "#entries") {
       if (enabled) await loadEntries().catch((error) => console.error(error));
-      else location.hash = "";
+      else if (!alwaysShowEntries) location.hash = "";
     }
   }
 
   window.addEventListener("tracking-changed", () => void refresh());
   window.addEventListener("hashchange", () => {
-    if (location.hash !== "#entries") return;
+    if (alwaysShowEntries || location.hash !== "#entries") return;
     if (!enabled) {
       location.hash = "";
       return;

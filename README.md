@@ -20,7 +20,8 @@ Native macOS menu bar app that shows your Clockify overtime.
   native app through `src/mainview/bridge.ts`; the available requests are typed in `src/shared/rpc.ts`.
 
 - `server/`: the optional self-hosted time tracking server (Bun + SQLite, run with Docker Compose).
-  The app talks to it in `macos/ClockifyOvertime/TimeTracking`.
+  The app talks to it in `macos/ClockifyOvertime/TimeTracking`. It also serves a mobile web UI
+  (`src/web/`), which reuses the dashboard's views with an HTTP transport instead of the native bridge.
 
 The Xcode build bundles the web UI with Bun (`scripts/build-web.sh`), so the app has no runtime
 dependencies.
@@ -84,7 +85,7 @@ and keep the entries on your own server, for example a NAS. Then you don't need 
 
 ### Run the server
 
-Copy the `server/` folder to the machine (or clone the repo there), then:
+Clone the repo on the machine (the image is built from it), then:
 
 ```sh
 cd server
@@ -107,7 +108,7 @@ docker compose exec time-tracking bun server.ts user add <name>
 ```
 
 It asks for a password (at least 8 characters; it is shown while you type). The person can then sign
-in with that name and password. Names are not case-sensitive.
+in with that name and password in the app or on the web page. Names are not case-sensitive.
 
 The other commands work the same way:
 
@@ -120,6 +121,12 @@ The other commands work the same way:
 Without Docker Compose, use `docker exec -it <container> bun server.ts user add <name>`. On a NAS
 without SSH, open a terminal for the container in its container manager and run
 `bun server.ts user add <name>` there.
+
+### Use it on your phone
+
+The server also hosts a mobile web page at its address (e.g. `http://192.168.1.10:8787`). Sign in to
+start and stop the timer, add, edit and delete entries, and see your overtime balance for a range and
+for the current week. On iOS, use Share → Add to Home Screen to open it like an app.
 
 ### Connect the app
 
