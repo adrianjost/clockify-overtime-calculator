@@ -111,6 +111,17 @@ body.web {
 
   .web .hero-value {
     font-size: clamp(28px, 8.5vw, 38px);
+    white-space: nowrap;
+  }
+
+  /* A long week detail wraps instead of pushing the balance onto two lines. */
+  .web .hero-main {
+    min-width: min-content;
+  }
+
+  .web .hero-stat {
+    flex-shrink: 1;
+    min-width: 0;
   }
 }
 
