@@ -59,6 +59,7 @@ function dayHeading(day: string): string {
  */
 export function initializeTracking({ alwaysShowEntries = false } = {}) {
   const timerButton = el<HTMLButtonElement>("#timer-button");
+  const discardButton = el<HTMLButtonElement>("#timer-discard");
   const entriesLink = document.querySelector<HTMLAnchorElement>("#entries-link");
   const list = el<HTMLDivElement>("#entries-list");
   const moreButton = el<HTMLButtonElement>("#entries-more");
@@ -88,6 +89,8 @@ export function initializeTracking({ alwaysShowEntries = false } = {}) {
 
   function renderTimer() {
     timerButton.hidden = !enabled;
+    discardButton.hidden = !enabled || running === null;
+    if (!running) resetDiscard();
     if (entriesLink) entriesLink.hidden = !enabled;
     timerButton.classList.toggle("is-running", running !== null);
     if (running) {
@@ -117,6 +120,35 @@ export function initializeTracking({ alwaysShowEntries = false } = {}) {
       alert(error instanceof Error ? error.message : String(error));
     } finally {
       timerButton.disabled = false;
+    }
+  });
+
+  let confirmDiscard: ReturnType<typeof setTimeout> | null = null;
+  const discardLabel = discardButton.textContent?.trim() ?? "Discard";
+  function resetDiscard() {
+    if (confirmDiscard !== null) clearTimeout(confirmDiscard);
+    confirmDiscard = null;
+    discardButton.textContent = discardLabel;
+    discardButton.classList.remove("is-confirming");
+  }
+
+  discardButton.addEventListener("click", async () => {
+    if (confirmDiscard === null) {
+      discardButton.textContent = "Click again to discard";
+      discardButton.classList.add("is-confirming");
+      confirmDiscard = setTimeout(resetDiscard, 3000);
+      return;
+    }
+    resetDiscard();
+    discardButton.disabled = timerButton.disabled = true;
+    try {
+      running = (await bridge.discardTimer({})).running;
+      renderTimer();
+      notifyChanged();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : String(error));
+    } finally {
+      discardButton.disabled = timerButton.disabled = false;
     }
   });
 
