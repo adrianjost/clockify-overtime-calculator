@@ -28,6 +28,7 @@ final class AppController {
 
   func start(launchedAtLogin: Bool) {
     LaunchAtLogin.migrateLegacyLaunchAgent()
+    applyTheme()
     server = Self.loadServer(preferences)
     if preferences.dataSource == nil {
       // Before the data source could be chosen, signing in to a server switched to it.
@@ -168,6 +169,14 @@ final class AppController {
       elapsedTitleTask?.cancel()
       elapsedTitleTask = nil
       updateTrayTitle()
+      return nil
+    case "getTheme":
+      return try json(["theme": preferences.theme ?? "system"])
+    case "setTheme":
+      let theme = params["theme"] as? String
+      preferences.theme = theme == "light" || theme == "dark" ? theme : nil
+      preferences.save()
+      applyTheme()
       return nil
     case "setTrayEnabled":
       setTrayEnabled(params["enabled"] as? Bool ?? true)
@@ -501,6 +510,15 @@ final class AppController {
       elapsedTitleTask = nil
     }
     statusItem?.setTitle(trayTitle)
+  }
+
+  /// The web view follows the app's appearance, so this also switches the page's colors.
+  private func applyTheme() {
+    switch preferences.theme {
+    case "light": NSApp.appearance = NSAppearance(named: .aqua)
+    case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
+    default: NSApp.appearance = nil
+    }
   }
 
   private func startTrayRefresh() {

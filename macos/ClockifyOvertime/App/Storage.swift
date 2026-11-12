@@ -12,6 +12,8 @@ struct Preferences: Codable {
   var trayEnabled: Bool = true
   /// Whether the running timer in the menu bar ticks every second.
   var trayShowsSeconds: Bool = false
+  /// "light" or "dark" to override the system appearance; nil follows the system.
+  var theme: String?
   var startDate: PlainDate?
   /// Where time entries come from: "clockify" or "server". Both can be set up at once.
   var dataSource: String?
@@ -25,6 +27,7 @@ struct Preferences: Codable {
     trayEnabled = try container.decodeIfPresent(Bool.self, forKey: .trayEnabled) ?? true
     trayShowsSeconds =
       try container.decodeIfPresent(Bool.self, forKey: .trayShowsSeconds) ?? false
+    theme = try container.decodeIfPresent(String.self, forKey: .theme)
     startDate = try container.decodeIfPresent(PlainDate.self, forKey: .startDate)
     dataSource = try container.decodeIfPresent(String.self, forKey: .dataSource)
     serverURL = try container.decodeIfPresent(String.self, forKey: .serverURL)

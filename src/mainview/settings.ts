@@ -1,5 +1,6 @@
 import type { DataSource } from "../shared/rpc.ts";
 import { bridge } from "./bridge.ts";
+import { initializeThemePicker } from "./theme-picker.ts";
 
 export function initializeSettings(onSettingsSaved: () => void, onCancel?: () => void) {
   const apiKeyInput = document.querySelector<HTMLInputElement>("#api-key");
@@ -20,6 +21,11 @@ export function initializeSettings(onSettingsSaved: () => void, onCancel?: () =>
       else onSettingsSaved();
     });
   }
+
+  void bridge
+    .getTheme({})
+    .then(({ theme }) => initializeThemePicker(theme, (theme) => void bridge.setTheme({ theme })))
+    .catch((error) => console.error("Loading the theme failed:", error));
 
   // Tray visibility toggle — only shown when API key already exists
   const trayEnabledGroup = document.querySelector<HTMLElement>("#tray-enabled-group");
