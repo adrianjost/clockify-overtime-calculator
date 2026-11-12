@@ -99,12 +99,19 @@ body.web {
   height: 22px;
 }
 
-.web .hero {
-  flex-wrap: wrap;
-}
-
 .web .hero-stat {
   display: block;
+}
+
+/* Small enough that this week's card fits next to the balance on a phone. */
+@media (max-width: 480px) {
+  .web .hero {
+    gap: 12px;
+  }
+
+  .web .hero-value {
+    font-size: clamp(28px, 8.5vw, 38px);
+  }
 }
 
 .web .timer-button {
