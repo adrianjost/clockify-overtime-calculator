@@ -1305,6 +1305,64 @@ input[type="checkbox"] {
   color: var(--negative);
 }
 
+/* In the app's toolbar, the timer is the main action: a filled pill like a primary button. */
+.toolbar-trailing .timer-button {
+  height: 30px;
+  padding: 0 14px 0 5px;
+  gap: 8px;
+  border: none;
+  border-radius: 15px;
+  background: var(--accent);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.15);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.toolbar-trailing .timer-button:hover {
+  background: color-mix(in srgb, var(--accent) 88%, #000);
+}
+
+.toolbar-trailing .timer-button.is-running {
+  background: var(--negative);
+  color: #fff;
+}
+
+.toolbar-trailing .timer-button.is-running:hover {
+  background: color-mix(in srgb, var(--negative) 88%, #000);
+}
+
+.toolbar-trailing .timer-button .timer-icon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.25);
+  clip-path: none;
+}
+
+.toolbar-trailing .timer-button .timer-icon::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 1.5px;
+  background: #fff;
+}
+
+.toolbar-trailing .timer-button .timer-icon--start::after {
+  width: 7px;
+  height: 9px;
+  margin-left: 2px;
+  border-radius: 0;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+.toolbar-trailing .timer-discard {
+  height: 30px;
+  border-radius: 15px;
+}
+
 .timer-discard.is-confirming {
   border-color: color-mix(in srgb, var(--negative) 45%, transparent);
   color: var(--negative);
