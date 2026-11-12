@@ -154,6 +154,34 @@ setTransport(async (method, params) => {
 
 const settingsView = document.querySelector<HTMLElement>("#settings-view")!;
 
+const passwordForm = document.querySelector<HTMLFormElement>("#password-form")!;
+const passwordStatus = document.querySelector<HTMLSpanElement>("#password-status")!;
+passwordForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const [current, next, repeat] = ["#password-current", "#password-new", "#password-repeat"].map(
+    (selector) => document.querySelector<HTMLInputElement>(selector)!,
+  );
+  const show = (text: string, isError = false) => {
+    passwordStatus.textContent = text;
+    passwordStatus.className = `save-status row-label ${isError ? "is-error" : "is-success"}`;
+  };
+  if (next!.value !== repeat!.value) {
+    show("The new passwords don't match.", true);
+    return;
+  }
+  try {
+    await api("POST", "/api/password", {
+      currentPassword: current!.value,
+      newPassword: next!.value,
+    });
+    passwordForm.reset();
+    show("✓ Password changed");
+  } catch (error) {
+    if (error instanceof Unauthorized) signOut(error.message);
+    else show(error instanceof Error ? error.message : String(error), true);
+  }
+});
+
 function signOut(message = "") {
   try {
     localStorage.removeItem(TOKEN_KEY);
@@ -444,6 +472,7 @@ function showMain() {
   const username = localStorage.getItem(USERNAME_KEY) ?? "";
   document.querySelector("#signed-in-as")!.textContent = `Signed in as ${username} ·`;
   document.querySelector("#settings-username")!.textContent = `Signed in as ${username}`;
+  document.querySelector<HTMLInputElement>("#password-username")!.value = username;
   void updateWelcome();
   if (started) {
     window.dispatchEvent(new Event("tracking-changed"));

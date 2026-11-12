@@ -78,6 +78,9 @@ const sessions = {
   touch: db.query("UPDATE sessions SET last_used_at = $now WHERE token_hash = $token_hash"),
   remove: db.query("DELETE FROM sessions WHERE token_hash = $token_hash"),
   removeForUser: db.query("DELETE FROM sessions WHERE user_id = $user_id"),
+  removeOthers: db.query(
+    "DELETE FROM sessions WHERE user_id = $user_id AND token_hash != $token_hash",
+  ),
 };
 
 const entries = {
@@ -459,6 +462,18 @@ function timerApi(user: User) {
       username: user.username,
       hasEntries: entries.any.get({ user_id }) !== null,
     }),
+    "POST /api/password": async (request) => {
+      const input = await body(request);
+      const current = typeof input.currentPassword === "string" ? input.currentPassword : "";
+      const next = typeof input.newPassword === "string" ? input.newPassword.trim() : "";
+      if (!(await Bun.password.verify(current, user.password_hash))) {
+        throw new HttpError(400, "The current password is wrong");
+      }
+      if (next.length < 8) throw new HttpError(400, "The new password needs at least 8 characters");
+      users.setPassword.run({ id: user_id, password_hash: await Bun.password.hash(next) });
+      sessions.removeOthers.run({ user_id, token_hash: hashToken(bearerToken(request)) });
+      return null;
+    },
     "POST /api/logout": (request) => {
       sessions.remove.run({ token_hash: hashToken(bearerToken(request)) });
       return null;
