@@ -6,3 +6,13 @@ services:
       - "8787:8080"
     volumes:
       - ./data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    # Only needed to hand the data folder to the bun user before the server starts.
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    pids_limit: 100
