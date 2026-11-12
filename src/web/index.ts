@@ -154,6 +154,33 @@ setTransport(async (method, params) => {
 
 const settingsView = document.querySelector<HTMLElement>("#settings-view")!;
 
+const usernameForm = document.querySelector<HTMLFormElement>("#username-form")!;
+const usernameStatus = document.querySelector<HTMLSpanElement>("#username-status")!;
+usernameForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const input = document.querySelector<HTMLInputElement>("#settings-username")!;
+  const show = (text: string, isError = false) => {
+    usernameStatus.textContent = text;
+    usernameStatus.className = `save-status row-label ${isError ? "is-error" : "is-success"}`;
+  };
+  try {
+    const { username } = await api<{ username: string }>("POST", "/api/username", {
+      username: input.value,
+    });
+    const previous = localStorage.getItem(USERNAME_KEY) ?? "";
+    // The welcome card remembers its dismissal per username.
+    const dismissed = localStorage.getItem(`welcome_dismissed:${previous}`);
+    if (dismissed) localStorage.setItem(`welcome_dismissed:${username}`, dismissed);
+    localStorage.setItem(USERNAME_KEY, username);
+    input.value = username;
+    document.querySelector<HTMLInputElement>("#password-username")!.value = username;
+    show("✓ Saved");
+  } catch (error) {
+    if (error instanceof Unauthorized) signOut(error.message);
+    else show(error instanceof Error ? error.message : String(error), true);
+  }
+});
+
 const passwordForm = document.querySelector<HTMLFormElement>("#password-form")!;
 const passwordStatus = document.querySelector<HTMLSpanElement>("#password-status")!;
 passwordForm.addEventListener("submit", async (event) => {
@@ -493,7 +520,7 @@ let started = false;
 function showMain() {
   showSignedInView();
   const username = localStorage.getItem(USERNAME_KEY) ?? "";
-  document.querySelector("#settings-username")!.textContent = `Signed in as ${username}`;
+  document.querySelector<HTMLInputElement>("#settings-username")!.value = username;
   document.querySelector<HTMLInputElement>("#password-username")!.value = username;
   void updateWelcome();
   if (started) {

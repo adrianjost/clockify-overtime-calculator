@@ -65,6 +65,7 @@ const users = {
     "INSERT INTO users (id, username, password_hash, created_at) VALUES ($id, $username, $password_hash, $created_at)",
   ),
   setPassword: db.query("UPDATE users SET password_hash = $password_hash WHERE id = $id"),
+  setUsername: db.query("UPDATE users SET username = $username WHERE id = $id"),
   remove: db.query("DELETE FROM users WHERE id = $id"),
 };
 
@@ -501,6 +502,17 @@ function timerApi(user: User) {
       username: user.username,
       hasEntries: entries.any.get({ user_id }) !== null,
     }),
+    "POST /api/username": async (request) => {
+      const input = await body(request);
+      const username = typeof input.username === "string" ? input.username.trim() : "";
+      if (!username || username.length > 64) {
+        throw new HttpError(400, "The username needs 1 to 64 characters");
+      }
+      const existing = users.byName.get({ username });
+      if (existing && existing.id !== user_id) throw new HttpError(409, "This username is taken");
+      users.setUsername.run({ id: user_id, username });
+      return { username };
+    },
     "POST /api/password": async (request) => {
       const input = await body(request);
       const current = typeof input.currentPassword === "string" ? input.currentPassword : "";

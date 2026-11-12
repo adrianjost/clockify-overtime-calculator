@@ -151,15 +151,31 @@
         <h1 class="web-title">Settings</h1>
       </header>
 
-      <section class="group">
+      <form class="group" id="username-form">
         <h2 class="group-title">Account</h2>
         <div class="group-box">
+          <div class="row row--stacked">
+            <label for="settings-username">Username</label>
+            <input
+              id="settings-username"
+              type="text"
+              autocomplete="username"
+              autocapitalize="none"
+              spellcheck="false"
+              maxlength="64"
+              required
+            />
+          </div>
           <div class="row">
-            <span class="row-label" id="settings-username"></span>
+            <span id="username-status" class="save-status row-label"></span>
+            <button type="submit" class="btn">Save</button>
+          </div>
+          <div class="row">
+            <span class="row-label">Sign out on this device</span>
             <button type="button" id="sign-out" class="btn">Sign out</button>
           </div>
         </div>
-      </section>
+      </form>
 
       <form class="group" id="password-form">
         <h2 class="group-title">Change password</h2>
