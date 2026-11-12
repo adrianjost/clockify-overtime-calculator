@@ -8,11 +8,16 @@
     "build": "xcodebuild -project macos/ClockifyOvertime.xcodeproj -scheme ClockifyOvertime -configuration Release -derivedDataPath build/DerivedData build",
     "format": "oxfmt --write",
     "typecheck": "tsc --noEmit -p .",
-    "generate-icons": "bun scripts/generate-icons.ts"
+    "generate-icons": "bun scripts/generate-icons.ts",
+    "format:check": "oxfmt --check"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "oxfmt": "^0.42.0",
-    "typescript": "^5.9.3"
-  }
+    "@types/bun": "1.4.4",
+    "oxfmt": "0.42.0",
+    "typescript": "5.9.3"
+  },
+  "overrides": {
+    "tinypool": "2.2.0"
+  },
+  "packageManager": "bun@1.4.4"
 }

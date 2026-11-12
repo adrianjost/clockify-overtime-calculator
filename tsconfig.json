@@ -17,6 +17,6 @@
     "noUnusedParameters": true,
     "noPropertyAccessFromIndexSignature": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "server/**/*", "scripts/**/*"],
   "exclude": ["node_modules", "build"]
 }
