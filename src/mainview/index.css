@@ -1452,6 +1452,69 @@ input[type="checkbox"] {
   color: var(--negative);
 }
 
+/* Two narrower cards peek out below a collapsed day. */
+.entry-stack {
+  position: relative;
+}
+
+.entry-stack .group-box {
+  transition: margin-bottom 150ms;
+}
+
+.entry-stack.is-collapsed .group-box {
+  margin-bottom: 10px;
+}
+
+.entry-stack::before,
+.entry-stack::after {
+  content: "";
+  position: absolute;
+  height: 5px;
+  border-radius: 0 0 8px 8px;
+  background: var(--group-bg);
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transition: opacity 150ms;
+}
+
+.entry-stack::before {
+  left: 6px;
+  right: 6px;
+  bottom: 5px;
+}
+
+.entry-stack::after {
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+}
+
+.entry-stack.is-collapsed::before,
+.entry-stack.is-collapsed::after {
+  opacity: 1;
+}
+
+.entry-stack:not(.is-collapsed) .entry-stack-summary {
+  font-weight: 600;
+}
+
+.entry-stack-summary .entry-span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.entry-count {
+  min-width: 20px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--hover);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
 .entries-empty {
   margin: 24px 0;
   text-align: center;
