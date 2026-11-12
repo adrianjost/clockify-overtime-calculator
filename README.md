@@ -158,7 +158,9 @@ the import and not stored. The server needs internet access to reach Clockify.
 
 On the web page, Settings → Export → CSV or JSON downloads all your time entries. The
 CSV has start and end date and time in your browser's time zone, the duration, and the exact times in
-ISO 8601, which most time tracking tools can import. The JSON lists the same entries with their IDs.
+ISO 8601, which most time tracking tools can import. The JSON lists the same entries with their IDs
+and works as a backup: Settings → Import → Backup restores it, into the same or another account.
+Entries whose time is already on the server are skipped, so restoring twice adds nothing.
 
 ### Connect the app
 
@@ -198,6 +200,7 @@ need it as `Authorization: Bearer <token>`. Times are ISO 8601.
 | `GET /api/timer`                                      | The running entry, if any                    |
 | `POST /api/timer/start` / `POST /api/timer/stop`      | Start or stop the timer                      |
 | `POST /api/import/clockify` `{apiKey}`                | Copy entries from Clockify                   |
+| `POST /api/import/backup` `{entries}`                 | Restore a JSON export                        |
 
 ## Signing and distribution
 

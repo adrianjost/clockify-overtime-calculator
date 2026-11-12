@@ -107,6 +107,9 @@ const entries = {
     "SELECT clockify_id FROM entries WHERE user_id = $user_id AND clockify_id IS NOT NULL",
   ),
   // Entries not imported from Clockify (or imported before clockify_id existed).
+  inRange: db.query<Row, { user_id: string; start: string; end: string }>(
+    "SELECT * FROM entries WHERE user_id = $user_id AND start < $end AND (end IS NULL OR end > $start)",
+  ),
   notImportedInRange: db.query<Row, { user_id: string; start: string; end: string }>(
     "SELECT * FROM entries WHERE user_id = $user_id AND clockify_id IS NULL AND start < $end AND (end IS NULL OR end > $start)",
   ),
@@ -292,6 +295,34 @@ async function clockify<T>(
   }
 }
 
+/** Whether one of `others` overlaps start–end by more than a few seconds. */
+function overlapsAny(others: Row[], start: string, end: string): boolean {
+  return others.some((other) => {
+    const overlapEnd = Math.min(Date.parse(end), other.end ? Date.parse(other.end) : Date.now());
+    return overlapEnd - Math.max(Date.parse(start), Date.parse(other.start)) > DUPLICATE_OVERLAP_MS;
+  });
+}
+
+/** Restores entries from this app's JSON export, skipping ones whose time is already here. */
+function restoreBackup(user_id: string, list: { start: string; end: string | null }[]) {
+  const result = { imported: 0, skipped: 0, running: 0 };
+  db.transaction(() => {
+    for (const { start, end } of list) {
+      if (!end) {
+        result.running++;
+        continue;
+      }
+      if (end <= start || overlapsAny(entries.inRange.all({ user_id, start, end }), start, end)) {
+        result.skipped++;
+        continue;
+      }
+      entries.insert.run({ id: crypto.randomUUID(), user_id, start, end, updated_at: now() });
+      result.imported++;
+    }
+  })();
+  return result;
+}
+
 /**
  * Copies all finished Clockify entries, except ones imported before and ones whose time is
  * already tracked on the server.
@@ -330,12 +361,7 @@ async function importFromClockify(
   const result = { imported: 0, skipped: 0, running: 0 };
   const imported = new Set(entries.clockifyIds.all({ user_id }).map((row) => row.clockify_id));
   const alreadyTracked = (start: string, end: string) =>
-    entries.notImportedInRange.all({ user_id, start, end }).some((other) => {
-      const overlapEnd = Math.min(Date.parse(end), other.end ? Date.parse(other.end) : Date.now());
-      return (
-        overlapEnd - Math.max(Date.parse(start), Date.parse(other.start)) > DUPLICATE_OVERLAP_MS
-      );
-    });
+    overlapsAny(entries.notImportedInRange.all({ user_id, start, end }), start, end);
   db.transaction(() => {
     for (const { id: clockify_id, timeInterval } of found) {
       if (!timeInterval.end) {
@@ -380,6 +406,19 @@ const importers: Record<string, (input: Record<string, unknown>) => ImportRun> =
     const apiKey = typeof input.apiKey === "string" ? input.apiKey.trim() : "";
     if (!apiKey) throw new HttpError(400, "apiKey is required");
     return (user_id, progress, signal) => importFromClockify(user_id, apiKey, progress, signal);
+  },
+  backup: (input) => {
+    if (!Array.isArray(input.entries)) {
+      throw new HttpError(400, "This is not a JSON export of this app");
+    }
+    const list = input.entries.map((entry: { start?: unknown; end?: unknown }, index) => ({
+      start: instant(entry?.start, `entries[${index}].start`),
+      end: entry?.end == null ? null : instant(entry.end, `entries[${index}].end`),
+    }));
+    return async (user_id, progress) => {
+      progress(`Restoring ${list.length} entries…`);
+      return restoreBackup(user_id, list);
+    };
   },
 };
 
