@@ -176,6 +176,10 @@ enum ISO8601Instant {
   static func parse(_ value: String) -> Date? {
     plain.date(from: value) ?? fractional.date(from: value)
   }
+
+  static func format(_ date: Date) -> String {
+    fractional.string(from: date)
+  }
 }
 
 enum ISO8601Duration {

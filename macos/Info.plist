@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- Lets the optional time tracking server run over plain HTTP on the local network
+		     (IP addresses, .local and single-word hostnames). Anything else needs HTTPS. -->
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Clockify Overtime connects to your self-hosted time tracking server.</string>
+</dict>
+</plist>

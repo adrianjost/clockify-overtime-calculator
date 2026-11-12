@@ -1,0 +1,8 @@
+services:
+  time-tracking:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8787:8080"
+    volumes:
+      - ./data:/data

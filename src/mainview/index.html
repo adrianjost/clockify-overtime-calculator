@@ -50,6 +50,44 @@
           </section>
 
           <section class="group">
+            <h2 class="group-title">Self-hosted time tracking</h2>
+            <div class="group-box">
+              <div class="row row--stacked">
+                <label for="server-url">Server address</label>
+                <input
+                  id="server-url"
+                  type="url"
+                  placeholder="http://192.168.1.10:8787"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+              </div>
+              <div class="row row--stacked">
+                <label for="server-username">Username</label>
+                <input
+                  id="server-username"
+                  type="text"
+                  autocomplete="username"
+                  spellcheck="false"
+                />
+              </div>
+              <div class="row row--stacked" id="server-password-row">
+                <label for="server-password">Password</label>
+                <input id="server-password" type="password" autocomplete="current-password" />
+              </div>
+              <div class="row">
+                <span id="server-signed-in" class="row-label"></span>
+                <button type="button" id="server-sign-in" class="btn">Sign in</button>
+              </div>
+            </div>
+            <p class="group-footer">
+              Optional. While signed in, you track time in this app and entries are stored on your
+              own server instead of being read from Clockify. Sign out to use Clockify again.
+              <span id="server-status" class="save-status"></span>
+            </p>
+          </section>
+
+          <section class="group">
             <h2 class="group-title">General</h2>
             <div class="group-box">
               <div class="row" id="launch-at-login-group" hidden>
@@ -102,7 +140,7 @@
               <div class="row">
                 <span class="row-label">
                   Reset everything
-                  <span class="row-hint">Removes the API key and all cached data</span>
+                  <span class="row-hint">Removes the API key, server settings and cached data</span>
                 </span>
                 <button id="reset-all-btn" class="btn-danger">Reset…</button>
               </div>
@@ -119,6 +157,19 @@
             <div id="last-fetched" class="last-fetched">
               <span id="fetch-spinner" class="fetch-spinner" hidden></span>
             </div>
+            <button type="button" id="timer-button" class="timer-button" hidden></button>
+            <a
+              href="#entries"
+              id="entries-link"
+              class="icon-button"
+              aria-label="Time entries"
+              title="Time entries"
+              hidden
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
+              </svg>
+            </a>
             <a href="#settings" class="icon-button" aria-label="Settings" title="Settings (⌘,)">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path
@@ -156,7 +207,64 @@
           </div>
         </div>
       </div>
+
+      <!-- Time Entries View -->
+      <div id="entries-container" class="entries-view" style="display: none">
+        <header class="settings-header">
+          <div class="settings-header-inner entries-header">
+            <button
+              type="button"
+              class="back-button"
+              id="entries-back"
+              aria-label="Back to overview"
+            >
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M10 3 5 8l5 5" />
+              </svg>
+              Overview
+            </button>
+            <div class="entries-title">
+              <h1>Time entries</h1>
+              <button type="button" id="add-entry" class="btn">Add entry</button>
+            </div>
+          </div>
+        </header>
+        <div class="settings-scroll">
+          <div id="entries-list"></div>
+          <div class="entries-more">
+            <button type="button" id="entries-more" class="btn">Show earlier entries</button>
+          </div>
+        </div>
+      </div>
     </div>
+    <dialog id="entry-dialog" class="entry-dialog">
+      <form method="dialog" id="entry-form">
+        <h2 id="entry-dialog-title">Time entry</h2>
+        <div class="group-box">
+          <div class="row">
+            <label for="entry-date">Date</label>
+            <input id="entry-date" type="date" required />
+          </div>
+          <div class="row">
+            <span class="row-label">Time</span>
+            <span class="entry-times">
+              <input id="entry-start" type="time" required aria-label="Start" />
+              <span>–</span>
+              <input id="entry-end" type="time" aria-label="End" />
+              <span id="entry-duration" class="entry-duration"></span>
+            </span>
+          </div>
+        </div>
+        <p id="entry-error" class="entry-error" role="alert"></p>
+        <div class="entry-actions">
+          <button type="button" id="entry-delete" class="btn-danger">Delete</button>
+          <span class="entry-actions-spacer"></span>
+          <button type="button" id="entry-cancel" class="btn">Cancel</button>
+          <button type="submit" id="entry-save" class="btn btn--primary">Save</button>
+        </div>
+      </form>
+    </dialog>
+
     <script src="index.js"></script>
   </body>
 </html>

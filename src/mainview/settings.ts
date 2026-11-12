@@ -13,8 +13,10 @@ export function initializeSettings(onSettingsSaved: () => void, onCancel?: () =>
 
   const closeBtn = document.querySelector<HTMLButtonElement>("#close-settings-btn");
   if (closeBtn) {
+    // During onboarding the settings are shown without a #settings history entry to go back from.
     closeBtn.addEventListener("click", () => {
-      onCancel?.();
+      if (location.hash === "#settings") onCancel?.();
+      else onSettingsSaved();
     });
   }
 
@@ -55,19 +57,19 @@ export function initializeSettings(onSettingsSaved: () => void, onCancel?: () =>
     });
   }
 
-  let hasStoredApiKey = false;
+  let isConfigured = false;
   const applyAuthVisibility = () => {
     if (dangerZone) {
-      dangerZone.style.display = hasStoredApiKey ? "" : "none";
+      dangerZone.style.display = isConfigured ? "" : "none";
     }
     if (closeBtn) {
-      closeBtn.hidden = !hasStoredApiKey;
+      closeBtn.hidden = !isConfigured;
     }
     if (trayEnabledGroup) {
-      trayEnabledGroup.hidden = !hasStoredApiKey;
+      trayEnabledGroup.hidden = !isConfigured;
     }
     if (launchAtLoginGroup) {
-      launchAtLoginGroup.hidden = !hasStoredApiKey;
+      launchAtLoginGroup.hidden = !isConfigured;
     }
   };
 
@@ -75,11 +77,14 @@ export function initializeSettings(onSettingsSaved: () => void, onCancel?: () =>
 
   void (async () => {
     try {
-      const state = await bridge.getStoredApiKey({});
+      const [state, setup] = await Promise.all([
+        bridge.getStoredApiKey({}),
+        bridge.getSetupState({}),
+      ]);
       const secureApiKey = (state?.apiKey ?? "").trim();
-      if (secureApiKey) {
-        apiKeyInput.value = secureApiKey;
-        hasStoredApiKey = true;
+      if (secureApiKey) apiKeyInput.value = secureApiKey;
+      if (setup.configured) {
+        isConfigured = true;
         if (trayEnabledCheckbox) {
           const trayState = await bridge.getTrayEnabled({});
           const enabled = Boolean(trayState?.enabled);
@@ -99,7 +104,7 @@ export function initializeSettings(onSettingsSaved: () => void, onCancel?: () =>
     if (value) {
       try {
         await bridge.setStoredApiKey({ apiKey: value });
-        hasStoredApiKey = true;
+        isConfigured = true;
         applyAuthVisibility();
         saveStatus.textContent = "✓ Saved";
         saveStatus.className = "save-status is-success";
@@ -116,6 +121,73 @@ export function initializeSettings(onSettingsSaved: () => void, onCancel?: () =>
       }
     }
   });
+
+  const serverUrlInput = document.querySelector<HTMLInputElement>("#server-url");
+  const serverUsernameInput = document.querySelector<HTMLInputElement>("#server-username");
+  const serverPasswordInput = document.querySelector<HTMLInputElement>("#server-password");
+  const serverPasswordRow = document.querySelector<HTMLElement>("#server-password-row");
+  const serverSignedIn = document.querySelector<HTMLElement>("#server-signed-in");
+  const serverButton = document.querySelector<HTMLButtonElement>("#server-sign-in");
+  const serverStatus = document.querySelector<HTMLSpanElement>("#server-status");
+  if (
+    serverUrlInput &&
+    serverUsernameInput &&
+    serverPasswordInput &&
+    serverPasswordRow &&
+    serverSignedIn &&
+    serverButton &&
+    serverStatus
+  ) {
+    let signedIn = false;
+    const renderServer = () => {
+      serverUrlInput.disabled = serverUsernameInput.disabled = signedIn;
+      serverPasswordRow.hidden = signedIn;
+      serverSignedIn.textContent = signedIn ? `Signed in as ${serverUsernameInput.value}` : "";
+      serverButton.textContent = signedIn ? "Sign out" : "Sign in";
+    };
+    const showServerStatus = (text: string, isError = false) => {
+      serverStatus.textContent = text;
+      serverStatus.className = `save-status ${isError ? "is-error" : "is-success"}`;
+    };
+
+    void bridge.getServerSettings({}).then((settings) => {
+      serverUrlInput.value = settings.url ?? "";
+      serverUsernameInput.value = settings.username ?? "";
+      signedIn = settings.signedIn;
+      renderServer();
+    });
+
+    const submit = async () => {
+      serverButton.disabled = true;
+      showServerStatus(signedIn ? "" : "Signing in…");
+      try {
+        if (signedIn) {
+          await bridge.signOutOfServer({});
+        } else {
+          await bridge.signInToServer({
+            url: serverUrlInput.value,
+            username: serverUsernameInput.value,
+            password: serverPasswordInput.value,
+          });
+        }
+        signedIn = !signedIn;
+        serverPasswordInput.value = "";
+        showServerStatus(signedIn ? "✓ Signed in" : "");
+        isConfigured = (await bridge.getSetupState({})).configured;
+        applyAuthVisibility();
+        renderServer();
+        window.dispatchEvent(new Event("tracking-changed"));
+      } catch (err) {
+        showServerStatus(err instanceof Error ? err.message : String(err), true);
+      } finally {
+        serverButton.disabled = false;
+      }
+    };
+    serverButton.addEventListener("click", submit);
+    serverPasswordInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") void submit();
+    });
+  }
 
   const resetBtn = document.querySelector<HTMLButtonElement>("#reset-all-btn");
   if (resetBtn) {
@@ -146,7 +218,7 @@ export function initializeSettings(onSettingsSaved: () => void, onCancel?: () =>
         console.error("clearStoredApiKey failed:", err);
       }
 
-      hasStoredApiKey = false;
+      isConfigured = false;
       applyAuthVisibility();
       bridge.closeApp({});
     });

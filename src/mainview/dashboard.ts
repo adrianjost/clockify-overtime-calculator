@@ -72,8 +72,11 @@ export function initializeDashboard(onNavigateToSettings: () => void) {
   }
 
   async function runAnalysis() {
-    const apiKey = await getStoredApiKey();
-    if (!apiKey) {
+    const [apiKey, { configured }] = await Promise.all([
+      getStoredApiKey(),
+      bridge.getSetupState({}),
+    ]);
+    if (!configured) {
       onNavigateToSettings();
       return;
     }
@@ -113,10 +116,12 @@ export function initializeDashboard(onNavigateToSettings: () => void) {
   runAnalysis();
 
   async function fetchIfApiKeyPresent() {
-    const apiKey = await getStoredApiKey();
-    if (!apiKey) return;
+    const { configured } = await bridge.getSetupState({});
+    if (!configured) return;
     await runAnalysis();
   }
+
+  window.addEventListener("tracking-changed", () => void runAnalysis());
 
   function startPolling() {
     if (pollTimer !== null) return;
