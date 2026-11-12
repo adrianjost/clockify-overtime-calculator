@@ -42,7 +42,9 @@
     <main id="main-view" class="web-page web-main" hidden>
       <header class="web-header">
         <div class="range-picker" id="range-picker"></div>
-        <span id="web-status" class="last-fetched"></span>
+        <div id="last-fetched" class="last-fetched">
+          <span id="fetch-spinner" class="fetch-spinner" hidden></span>
+        </div>
       </header>
 
       <div class="web-columns">
@@ -73,6 +75,20 @@
           <button type="button" id="timer-discard" class="btn timer-discard" hidden>
             Discard timer
           </button>
+
+          <div class="charts-container">
+            <div class="chart-card">
+              <div class="chart-header">
+                <h2>Daily Working Hours</h2>
+                <ul class="chart-legend" aria-hidden="true">
+                  <li><span class="swatch swatch--bar"></span>Worked</li>
+                  <li><span class="swatch swatch--target"></span>Target</li>
+                  <li><span class="swatch swatch--balance"></span>Balance</li>
+                </ul>
+              </div>
+              <div id="daily-chart"></div>
+            </div>
+          </div>
         </div>
 
         <section class="web-entries">

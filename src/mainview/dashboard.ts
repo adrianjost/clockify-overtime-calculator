@@ -248,7 +248,7 @@ function renderCharts(data: OvertimeData) {
     const visibleCount = effective.end - effective.start + 1;
 
     // Render bar chart
-    const chartWidth = Math.max(360, Math.floor(dailyContainer.clientWidth || 800));
+    const chartWidth = Math.max(280, Math.floor(dailyContainer.clientWidth || 800));
 
     // Get available height from the charts-container flex space
     const chartsContainer = document.querySelector<HTMLDivElement>(".charts-container");
