@@ -210,7 +210,7 @@ document.querySelector("#import-form")!.addEventListener("submit", async (event)
     importKey.value = "";
     importResult.textContent =
       `Imported ${imported} ${imported === 1 ? "entry" : "entries"}` +
-      (skipped ? `, skipped ${skipped} that overlap existing ones` : "") +
+      (skipped ? `, skipped ${skipped} that are already on the server` : "") +
       (running ? ". A running Clockify timer was not imported." : ".");
     window.dispatchEvent(new Event("tracking-changed"));
   } catch (error) {
