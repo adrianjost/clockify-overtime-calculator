@@ -58,6 +58,7 @@ export type AppRequests = {
   };
   deleteEntry: { params: { id: string }; response: void };
   setContentMaxHeight: { params: { height: number }; response: void };
+  setContentMinWidth: { params: { width: number }; response: void };
   getLaunchAtLogin: { params: {}; response: { enabled: boolean } };
   setLaunchAtLogin: { params: { enabled: boolean }; response: void };
   getTrayEnabled: { params: {}; response: { enabled: boolean } };

@@ -59,6 +59,9 @@ function dayHeading(day: string): string {
  * Timer button, time entry list and entry editor; only active with a self-hosted server.
  * The web UI shows the list all the time instead of in the #entries view.
  */
+// Page padding, the dashboard at its narrowest, the gap and the sidebar.
+const SIDEBAR_MIN_WIDTH = 40 + 420 + 16 + 280;
+
 export function initializeTracking({ alwaysShowEntries = false, assumeEnabled = false } = {}) {
   const timerButton = el<HTMLButtonElement>("#timer-button");
   const discardButton = el<HTMLButtonElement>("#timer-discard");
@@ -108,6 +111,8 @@ export function initializeTracking({ alwaysShowEntries = false, assumeEnabled = 
     }
     if (sidebar && sidebar.hidden === entriesShown()) {
       sidebar.hidden = !entriesShown();
+      // The window widens for the sidebar instead of squeezing the chart.
+      void bridge.setContentMinWidth({ width: entriesShown() ? SIDEBAR_MIN_WIDTH : 0 });
       // The chart only redraws for a new width on resize.
       window.dispatchEvent(new Event("resize"));
     }

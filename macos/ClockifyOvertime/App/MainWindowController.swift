@@ -103,6 +103,20 @@ final class MainWindowController: NSObject, NSWindowDelegate, WKScriptMessageHan
     }
   }
 
+  /// Keeps the window at least this wide, widening it now if needed (e.g. for the entries sidebar).
+  func setPageMinWidth(_ width: Double) {
+    let minWidth = max(Self.minSize.width, CGFloat(width))
+    window.contentMinSize = NSSize(width: minWidth, height: window.contentMinSize.height)
+    guard let contentWidth = window.contentView?.frame.width, contentWidth < minWidth else { return }
+    var frame = window.frame
+    frame.size.width += minWidth - contentWidth
+    if let visible = window.screen?.visibleFrame {
+      // Grow to the right, or move left where the screen ends.
+      frame.origin.x = max(visible.minX, min(frame.origin.x, visible.maxX - frame.width))
+    }
+    window.setFrame(frame, display: true, animate: true)
+  }
+
   /// Tells the page that the timer or entries changed outside of it (e.g. from the menu bar).
   func notifyTrackingChanged() {
     webView.evaluateJavaScript("window.dispatchEvent(new Event('tracking-changed'))")
