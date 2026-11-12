@@ -28,6 +28,25 @@ enum PlainDates {
     formatter.string(from: date)
   }
 
+  private static let localFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.calendar = Calendar(identifier: .gregorian)
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.dateFormat = "yyyy-MM-dd"
+    return formatter
+  }()
+
+  /// The day in the Mac's time zone.
+  static func formatLocal(_ date: Date) -> PlainDate {
+    localFormatter.string(from: date)
+  }
+
+  /// Midnight of the day in the Mac's time zone.
+  static func parseLocal(_ value: PlainDate) -> Date? {
+    guard value.count == 10 else { return nil }
+    return localFormatter.date(from: value)
+  }
+
   static func todayUTC() -> PlainDate {
     format(Date())
   }

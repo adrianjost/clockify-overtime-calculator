@@ -6,6 +6,9 @@ final class AppController {
   private var preferences = Preferences.load()
   private let store = TimeEntryStore(cacheFile: Paths.timeEntryCache)
   private var currentApiKey: String?
+  private var server: TrackingServer?
+  private var runningEntry: TrackedEntry?
+  private var overtimeTitle = "--"
   private var trayTitle = "--"
   private var statusItem: StatusItemController?
   private var mainWindow: MainWindowController?
@@ -13,6 +16,7 @@ final class AppController {
 
   func start(launchedAtLogin: Bool) {
     LaunchAtLogin.migrateLegacyLaunchAgent()
+    server = Self.loadServer(preferences)
     if preferences.trayEnabled {
       createStatusItem()
     }
@@ -62,6 +66,52 @@ final class AppController {
         endDate: params["endDate"] as? String ?? ""
       )
       return try json(data)
+    case "getSetupState":
+      return try json([
+        "configured": server != nil || Keychain.loadApiKey() != nil,
+        "tracking": server != nil,
+      ])
+    case "getServerSettings":
+      return try json(
+        ServerSettings(
+          url: preferences.serverURL, username: preferences.serverUsername,
+          signedIn: server != nil))
+    case "signInToServer":
+      try await signInToServer(
+        url: params["url"] as? String ?? "", username: params["username"] as? String ?? "",
+        password: params["password"] as? String ?? "")
+      return nil
+    case "signOutOfServer":
+      await signOutOfServer()
+      return nil
+    case "getTimer":
+      if let server { runningEntry = try await server.runningTimer() }
+      updateTrayTitle()
+      return try json(["running": runningEntry])
+    case "startTimer", "stopTimer", "discardTimer":
+      try await timerAction(method)
+      return try json(["running": runningEntry])
+    case "listEntries":
+      let server = try requireServer()
+      let (from, to) = try Self.localRange(
+        params["startDate"] as? String ?? "", params["endDate"] as? String ?? "")
+      return try json(try await server.entries(from: from, to: to))
+    case "saveEntry":
+      let server = try requireServer()
+      let start = params["start"] as? String ?? ""
+      let end = params["end"] as? String
+      let entry =
+        if let id = params["id"] as? String {
+          try await server.update(id: id, start: start, end: end)
+        } else {
+          try await server.create(start: start, end: end)
+        }
+      Task { await refreshTray() }
+      return try json(entry)
+    case "deleteEntry":
+      try await requireServer().delete(id: params["id"] as? String ?? "")
+      Task { await refreshTray() }
+      return nil
     case "closeApp":
       mainWindow?.close()
       return nil
@@ -87,10 +137,17 @@ final class AppController {
       return nil
     case "clearStoredApiKey":
       Keychain.clearApiKey()
+      try? await server?.signOut()
+      Keychain.clearServerToken()
+      preferences.serverURL = nil
+      preferences.serverUsername = nil
+      preferences.save()
+      server = nil
+      runningEntry = nil
       store.clear()
       currentApiKey = nil
       stopTrayRefresh()
-      setTrayTitle("--")
+      setOvertimeTitle("--")
       return nil
     default:
       throw ClockifyError(message: "Unknown method: \(method)")
@@ -106,6 +163,13 @@ final class AppController {
   private func analyzeFromDashboard(apiKey: String, startDate: PlainDate, endDate: PlainDate)
     async throws -> OvertimeData
   {
+    if let server {
+      let data = try await analyze(server: server, startDate: startDate, endDate: endDate)
+      preferences.startDate = startDate
+      preferences.save()
+      startTrayRefresh()
+      return data
+    }
     let apiKey = apiKey.trimmingCharacters(in: .whitespaces)
     let data = try await analyze(apiKey: apiKey, startDate: startDate, endDate: endDate)
     if apiKey != currentApiKey {
@@ -134,33 +198,177 @@ final class AppController {
       apiKey: apiKey, startDate: startDate, endDate: endDate)
     let data = try OvertimeReport.build(
       secondsPerDay: secondsPerDay, startDate: startDate, endDate: endDate)
-    setTrayTitle(Self.formatTrayTitle(totalSeconds: data.totalOvertimeSeconds))
+    setOvertimeTitle(Self.formatTrayTitle(totalSeconds: data.totalOvertimeSeconds))
+    return data
+  }
+
+  private func analyze(server: TrackingServer, startDate: PlainDate, endDate: PlainDate)
+    async throws -> OvertimeData
+  {
+    let (from, to) = try Self.localRange(startDate, endDate)
+    let entries = try await server.entries(from: from, to: to)
+    runningEntry = entries.first { $0.end == nil }
+    let data = try OvertimeReport.build(
+      secondsPerDay: TrackingServer.secondsPerDay(entries), startDate: startDate,
+      endDate: endDate)
+    setOvertimeTitle(Self.formatTrayTitle(totalSeconds: data.totalOvertimeSeconds))
     return data
   }
 
   private func refreshTray() async {
-    guard let apiKey = currentApiKey else { return }
     let year = Calendar.current.component(.year, from: Date())
     let startDate = preferences.startDate ?? String(format: "%04d-01-01", year)
     do {
-      _ = try await analyze(apiKey: apiKey, startDate: startDate, endDate: PlainDates.todayUTC())
+      if let server {
+        let today = PlainDates.formatLocal(Date())
+        _ = try await analyze(server: server, startDate: startDate, endDate: today)
+      } else if let apiKey = currentApiKey {
+        _ = try await analyze(apiKey: apiKey, startDate: startDate, endDate: PlainDates.todayUTC())
+      }
     } catch {
       print("Tray refresh failed:", error.localizedDescription)
     }
   }
 
   private func refreshTrayOnLaunch() async {
-    guard let apiKey = Keychain.loadApiKey() else { return }
-    currentApiKey = apiKey
+    currentApiKey = Keychain.loadApiKey()
+    guard server != nil || currentApiKey != nil else { return }
     await refreshTray()
     startTrayRefresh()
+  }
+
+  // MARK: - Time tracking
+
+  /// Signed in when there is a session token; the address alone is kept after signing out.
+  private static func loadServer(_ preferences: Preferences) -> TrackingServer? {
+    guard let url = preferences.serverURL.flatMap(URL.init(string:)),
+      let token = Keychain.loadServerToken()
+    else { return nil }
+    return TrackingServer(baseURL: url, token: token)
+  }
+
+  private func requireServer() throws -> TrackingServer {
+    guard let server else {
+      throw ClockifyError(message: "No time tracking server is set up.")
+    }
+    return server
+  }
+
+  private struct ServerSettings: Encodable {
+    let url: String?
+    let username: String?
+    let signedIn: Bool
+  }
+
+  private func signInToServer(url: String, username: String, password: String) async throws {
+    let url = url.trimmingCharacters(in: .whitespaces)
+    let username = username.trimmingCharacters(in: .whitespaces)
+    guard let baseURL = URL(string: url), ["http", "https"].contains(baseURL.scheme ?? "") else {
+      throw ClockifyError(message: "Enter the server address, e.g. http://192.168.1.10:8787")
+    }
+    guard !username.isEmpty, !password.isEmpty else {
+      throw ClockifyError(message: "Enter your username and password.")
+    }
+    let token = try await TrackingServer.signIn(
+      baseURL: baseURL, username: username, password: password)
+    try Keychain.storeServerToken(token)
+    preferences.serverURL = url
+    preferences.serverUsername = username
+    preferences.save()
+    server = TrackingServer(baseURL: baseURL, token: token)
+    runningEntry = try? await server?.runningTimer()
+    await refreshTray()
+    startTrayRefresh()
+  }
+
+  /// Switches back to Clockify. Keeps the address and username to make signing in again easy.
+  private func signOutOfServer() async {
+    try? await server?.signOut()
+    Keychain.clearServerToken()
+    server = nil
+    runningEntry = nil
+    updateTrayTitle()
+    stopTrayRefresh()
+    setOvertimeTitle("--")
+    await refreshTrayOnLaunch()
+  }
+
+  private func timerAction(_ action: String) async throws {
+    let server = try requireServer()
+    switch action {
+    case "startTimer":
+      runningEntry = try await server.startTimer()
+    case "stopTimer":
+      try await server.stopTimer()
+      runningEntry = nil
+    default:
+      if let running = try await server.runningTimer() {
+        try await server.delete(id: running.id)
+      }
+      runningEntry = nil
+    }
+    updateTrayTitle()
+    mainWindow?.notifyTrackingChanged()
+    await refreshTray()
+  }
+
+  private func runTimerAction(_ action: String) {
+    Task {
+      do {
+        try await timerAction(action)
+      } catch {
+        let alert = NSAlert()
+        alert.messageText = "Time tracking failed"
+        alert.informativeText = error.localizedDescription
+        alert.runModal()
+      }
+    }
+  }
+
+  private func timerMenuItems() -> [NSMenuItem] {
+    guard server != nil else { return [] }
+    if let running = runningEntry {
+      return [
+        MenuAction.item("Stop timer (\(Self.formatElapsed(running.seconds)))", key: "") {
+          [unowned self] in runTimerAction("stopTimer")
+        },
+        MenuAction.item("Discard timer", key: "") { [unowned self] in
+          runTimerAction("discardTimer")
+        },
+      ]
+    }
+    return [
+      MenuAction.item("Start timer", key: "") { [unowned self] in runTimerAction("startTimer") }
+    ]
+  }
+
+  /// Midnight at the start of `startDate` to midnight after `endDate`, in the Mac's time zone.
+  private static func localRange(_ startDate: PlainDate, _ endDate: PlainDate) throws -> (
+    Date, Date
+  ) {
+    guard let from = PlainDates.parseLocal(startDate),
+      let lastDay = PlainDates.parseLocal(endDate),
+      let to = Calendar.current.date(byAdding: .day, value: 1, to: lastDay)
+    else {
+      throw ClockifyError(message: "Invalid date format, expected YYYY-MM-DD")
+    }
+    return (from, to)
+  }
+
+  private static func formatElapsed(_ seconds: Double) -> String {
+    let minutes = Int(seconds) / 60
+    return String(format: "%d:%02d", minutes / 60, minutes % 60)
   }
 
   // MARK: - Tray
 
   private func createStatusItem() {
     guard statusItem == nil else { return }
-    statusItem = StatusItemController(title: trayTitle) { [unowned self] in openMainWindow() }
+    statusItem = StatusItemController(
+      title: trayTitle,
+      extraMenuItems: { [unowned self] in timerMenuItems() },
+      onOpen: { [unowned self] in openMainWindow() }
+    )
   }
 
   private func setTrayEnabled(_ enabled: Bool) {
@@ -176,13 +384,19 @@ final class AppController {
     }
   }
 
-  private func setTrayTitle(_ title: String) {
-    trayTitle = title
-    statusItem?.setTitle(title)
+  private func setOvertimeTitle(_ title: String) {
+    overtimeTitle = title
+    updateTrayTitle()
+  }
+
+  /// A dot in front of the overtime shows a running timer.
+  private func updateTrayTitle() {
+    trayTitle = runningEntry == nil ? overtimeTitle : "● \(overtimeTitle)"
+    statusItem?.setTitle(trayTitle)
   }
 
   private func startTrayRefresh() {
-    guard preferences.trayEnabled, currentApiKey != nil else { return }
+    guard preferences.trayEnabled, server != nil || currentApiKey != nil else { return }
     trayRefreshTask?.cancel()
     trayRefreshTask = Task { [weak self] in
       while !Task.isCancelled {

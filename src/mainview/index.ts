@@ -1,9 +1,11 @@
 import { bridge } from "./bridge.ts";
 import { initializeSettings } from "./settings.ts";
 import { initializeDashboard } from "./dashboard.ts";
+import { initializeTracking } from "./tracking.ts";
 
 const settingsContainer = document.querySelector("#settings-container") as HTMLDivElement;
 const dashboardContainer = document.querySelector("#dashboard-container") as HTMLDivElement;
+const entriesContainer = document.querySelector("#entries-container") as HTMLDivElement;
 
 if (!settingsContainer || !dashboardContainer) {
   console.error("App containers are missing");
@@ -11,22 +13,21 @@ if (!settingsContainer || !dashboardContainer) {
   throw new Error("App containers are missing");
 }
 
-// Navigation functions
-const showSettings = () => {
-  settingsContainer.style.removeProperty("display");
-  dashboardContainer.style.display = "none";
+const showView = (view: HTMLElement) => {
+  for (const container of [settingsContainer, dashboardContainer, entriesContainer]) {
+    if (container === view) container.style.removeProperty("display");
+    else container.style.display = "none";
+  }
 };
+const showSettings = () => showView(settingsContainer);
+const showDashboard = () => showView(dashboardContainer);
 
-const showDashboard = () => {
-  settingsContainer.style.display = "none";
-  dashboardContainer.style.removeProperty("display");
-};
-
-// Handle URL hash navigation
 const handleNavigation = () => {
   const hash = window.location.hash;
   if (hash === "#settings") {
     showSettings();
+  } else if (hash === "#entries") {
+    showView(entriesContainer);
   } else {
     showDashboard();
   }
@@ -34,15 +35,18 @@ const handleNavigation = () => {
 
 window.addEventListener("hashchange", handleNavigation);
 
-const settingsScroll = settingsContainer.querySelector<HTMLElement>(".settings-scroll");
-settingsScroll?.addEventListener("scroll", () => {
-  settingsContainer.classList.toggle("is-scrolled", settingsScroll.scrollTop > 0);
-});
+for (const view of [settingsContainer, entriesContainer]) {
+  const scroll = view.querySelector<HTMLElement>(".settings-scroll");
+  scroll?.addEventListener("scroll", () => {
+    view.classList.toggle("is-scrolled", scroll.scrollTop > 0);
+  });
+}
 handleNavigation();
 
 try {
   // Initialize both views
   const { runAnalysis } = initializeDashboard(showSettings);
+  initializeTracking();
   initializeSettings(
     () => {
       showDashboard();
@@ -53,16 +57,11 @@ try {
     },
   );
 
-  // Check if we have API key in secure storage
+  // Without a Clockify API key or a time tracking server, start in the settings.
   void (async () => {
     try {
-      const state = await bridge.getStoredApiKey({});
-      const apiKey = (state?.apiKey ?? "").trim();
-      if (!apiKey) {
-        showSettings();
-      } else {
-        showDashboard();
-      }
+      const { configured } = await bridge.getSetupState({});
+      if (!configured) showSettings();
     } catch {
       showSettings();
     }

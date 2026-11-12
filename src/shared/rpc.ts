@@ -9,6 +9,13 @@ export interface OvertimeData {
   }>;
 }
 
+/** An entry on the self-hosted time tracking server; ISO 8601 times, `end` null while running. */
+export interface TrackedEntry {
+  id: string;
+  start: string;
+  end: string | null;
+}
+
 // Requests handled by the native app, see macos/ClockifyOvertime/App/AppController.swift.
 export type AppRequests = {
   analyzeOvertime: {
@@ -16,6 +23,23 @@ export type AppRequests = {
     response: OvertimeData;
   };
   closeApp: { params: {}; response: void };
+  getSetupState: { params: {}; response: { configured: boolean; tracking: boolean } };
+  getServerSettings: {
+    params: {};
+    response: { url: string | null; username: string | null; signedIn: boolean };
+  };
+  signInToServer: { params: { url: string; username: string; password: string }; response: void };
+  signOutOfServer: { params: {}; response: void };
+  getTimer: { params: {}; response: { running: TrackedEntry | null } };
+  startTimer: { params: {}; response: { running: TrackedEntry | null } };
+  stopTimer: { params: {}; response: { running: TrackedEntry | null } };
+  discardTimer: { params: {}; response: { running: TrackedEntry | null } };
+  listEntries: { params: { startDate: string; endDate: string }; response: TrackedEntry[] };
+  saveEntry: {
+    params: { id?: string; start: string; end: string | null };
+    response: TrackedEntry;
+  };
+  deleteEntry: { params: { id: string }; response: void };
   setContentMaxHeight: { params: { height: number }; response: void };
   getLaunchAtLogin: { params: {}; response: { enabled: boolean } };
   setLaunchAtLogin: { params: { enabled: boolean }; response: void };

@@ -11,6 +11,10 @@ enum Paths {
 struct Preferences: Codable {
   var trayEnabled: Bool = true
   var startDate: PlainDate?
+  /// Optional self-hosted time tracking server. When set, time entries come from there
+  /// instead of Clockify.
+  var serverURL: String?
+  var serverUsername: String?
 
   init() {}
 
@@ -18,6 +22,8 @@ struct Preferences: Codable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     trayEnabled = try container.decodeIfPresent(Bool.self, forKey: .trayEnabled) ?? true
     startDate = try container.decodeIfPresent(PlainDate.self, forKey: .startDate)
+    serverURL = try container.decodeIfPresent(String.self, forKey: .serverURL)
+    serverUsername = try container.decodeIfPresent(String.self, forKey: .serverUsername)
   }
 
   static func load() -> Preferences {
@@ -42,9 +48,18 @@ struct Preferences: Codable {
 
 enum Keychain {
   private static let service = "dev.adrianjost.clockify-overtime"
-  private static let account = "clockify-api-key"
+  private static let apiKeyAccount = "clockify-api-key"
+  private static let serverTokenAccount = "server-token"
 
-  private static var query: [String: Any] {
+  static func loadApiKey() -> String? { load(apiKeyAccount) }
+  static func storeApiKey(_ apiKey: String) throws { try store(apiKey, apiKeyAccount) }
+  static func clearApiKey() { clear(apiKeyAccount) }
+
+  static func loadServerToken() -> String? { load(serverTokenAccount) }
+  static func storeServerToken(_ token: String) throws { try store(token, serverTokenAccount) }
+  static func clearServerToken() { clear(serverTokenAccount) }
+
+  private static func query(_ account: String) -> [String: Any] {
     [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,
@@ -52,24 +67,24 @@ enum Keychain {
     ]
   }
 
-  static func loadApiKey() -> String? {
-    var request = query
+  private static func load(_ account: String) -> String? {
+    var request = query(account)
     request[kSecReturnData as String] = true
     request[kSecMatchLimit as String] = kSecMatchLimitOne
     var result: AnyObject?
     guard SecItemCopyMatching(request as CFDictionary, &result) == errSecSuccess,
       let data = result as? Data
     else { return nil }
-    let apiKey = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespaces)
-    return apiKey.isEmpty ? nil : apiKey
+    let value = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespaces)
+    return value.isEmpty ? nil : value
   }
 
-  static func storeApiKey(_ apiKey: String) throws {
-    let data = Data(apiKey.trimmingCharacters(in: .whitespaces).utf8)
+  private static func store(_ value: String, _ account: String) throws {
+    let data = Data(value.trimmingCharacters(in: .whitespaces).utf8)
     let status = SecItemUpdate(
-      query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+      query(account) as CFDictionary, [kSecValueData as String: data] as CFDictionary)
     if status == errSecItemNotFound {
-      var item = query
+      var item = query(account)
       item[kSecValueData as String] = data
       let addStatus = SecItemAdd(item as CFDictionary, nil)
       guard addStatus == errSecSuccess else { throw keychainError(addStatus) }
@@ -78,12 +93,12 @@ enum Keychain {
     }
   }
 
-  static func clearApiKey() {
-    SecItemDelete(query as CFDictionary)
+  private static func clear(_ account: String) {
+    SecItemDelete(query(account) as CFDictionary)
   }
 
   private static func keychainError(_ status: OSStatus) -> Error {
     let message = SecCopyErrorMessageString(status, nil) as String? ?? "OSStatus \(status)"
-    return ClockifyError(message: "Could not securely store API key: \(message)")
+    return ClockifyError(message: "Could not store the secret in the Keychain: \(message)")
   }
 }

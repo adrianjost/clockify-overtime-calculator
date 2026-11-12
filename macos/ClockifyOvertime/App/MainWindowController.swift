@@ -97,6 +97,11 @@ final class MainWindowController: NSObject, NSWindowDelegate, WKScriptMessageHan
     }
   }
 
+  /// Tells the page that the timer or entries changed outside of it (e.g. from the menu bar).
+  func notifyTrackingChanged() {
+    webView.evaluateJavaScript("window.dispatchEvent(new Event('tracking-changed'))")
+  }
+
   func showSettings() {
     webView.evaluateJavaScript("location.hash = '#settings'")
   }
