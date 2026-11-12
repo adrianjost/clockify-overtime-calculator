@@ -180,17 +180,26 @@ body.web {
   color: var(--text-secondary);
 }
 
-.web-footer-export {
-  flex-basis: 100%;
-  text-align: center;
+.web-settings-header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 
-.web-footer-export .link-button {
+.web-settings-header .web-title {
+  margin: 0;
+}
+
+.web-settings-header .link-button,
+.web-footer .link-button {
   padding: 0;
+  text-decoration: none;
 }
 
-.web-footer-import {
-  flex-basis: 100%;
+.export-buttons {
+  display: flex;
+  gap: 8px;
 }
 
 .import-hint {
