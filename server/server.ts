@@ -316,7 +316,13 @@ type Input = Partial<
   >
 >;
 
+// Browsers send other content types across sites without asking the server first, so only JSON
+// bodies are read. This stops other websites from posting to the API, e.g. to /api/login.
 async function body(request: Request): Promise<Input> {
+  const type = request.headers.get("content-type") ?? "";
+  if (!/^application\/json\s*(;|$)/i.test(type)) {
+    throw new HttpError(415, "Send the request body as application/json");
+  }
   try {
     const json = await request.json();
     if (json && typeof json === "object") return json as Input;

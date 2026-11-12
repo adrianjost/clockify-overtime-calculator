@@ -204,7 +204,8 @@ Once connected:
 
 Entries have `labels`: a list of names. A prefix like `project:` or `tag:` gives a label its kind;
 labels are created when first used. `POST /api/login` with `{username, password}` returns a session token. All other `/api` requests
-need it as `Authorization: Bearer <token>`. Times are ISO 8601.
+need it as `Authorization: Bearer <token>`. Request bodies must be JSON with
+`Content-Type: application/json`. Times are ISO 8601.
 
 | Request                                               | Purpose                                      |
 | ----------------------------------------------------- | -------------------------------------------- |
