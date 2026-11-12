@@ -4,6 +4,7 @@ import { setTransport } from "../mainview/bridge.ts";
 import { DASHBOARD_CACHE_KEY, initializeDashboard } from "../mainview/dashboard.ts";
 import { initializeTracking } from "../mainview/tracking.ts";
 import { initializeThemePicker } from "../mainview/theme-picker.ts";
+import { createOfflineStore, ServerError } from "./offline.ts";
 
 // The mobile web UI served by the time tracking server. It reuses the app's views and talks to
 // the server's API directly instead of through the macOS app.
@@ -92,14 +93,54 @@ async function runImport(
   throw new Error("The connection to the server was lost. Try again.");
 }
 
-function rangeQuery(startDate: string, endDate: string): string {
-  const from = localMidnight(startDate).toISOString();
-  const to = localMidnight(endDate, 1).toISOString();
-  return `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+function isoRange(startDate: string, endDate: string): [string, string] {
+  return [localMidnight(startDate).toISOString(), localMidnight(endDate, 1).toISOString()];
 }
 
+/** A random UUID; crypto.randomUUID only exists on HTTPS pages. */
+function uuid(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+const syncStatus = document.querySelector<HTMLElement>("#sync-status")!;
+const store = createOfflineStore(
+  (method, path, body) => request(method, path, body, token(), AbortSignal.timeout(8000)),
+  renderSyncStatus,
+);
+
+function renderSyncStatus() {
+  const { offline, pending, error } = store.status();
+  const unsynced = pending ? `${pending} ${pending === 1 ? "change" : "changes"} not synced` : "";
+  syncStatus.textContent =
+    error || (offline ? ["Offline", unsynced].filter(Boolean).join(" · ") : unsynced);
+  syncStatus.classList.toggle("is-error", Boolean(error));
+  syncStatus.hidden = !syncStatus.textContent;
+}
+
+function syncNow() {
+  store
+    .flush()
+    .then(() => window.dispatchEvent(new Event("tracking-changed")))
+    .catch((error) => {
+      if (error instanceof ServerError && error.status === 401) signOut("Please sign in again.");
+    });
+}
+
+renderSyncStatus();
+window.addEventListener("online", syncNow);
+window.addEventListener("offline", renderSyncStatus);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && store.status().pending) syncNow();
+});
+setInterval(() => {
+  if (store.status().pending) syncNow();
+}, 15_000);
+
 type Params = Record<string, string | null | undefined>;
-type Timer = { running: TrackedEntry | null };
 
 async function handle(method: string, params: Params): Promise<unknown> {
   switch (method) {
@@ -110,33 +151,41 @@ async function handle(method: string, params: Params): Promise<unknown> {
     case "getSetupState":
       return { dataSource: "server", configured: true, tracking: true };
     case "getTimer":
-      return api<Timer>("GET", "/api/timer");
-    case "startTimer":
-      return api<Timer>("POST", "/api/timer/start");
-    case "stopTimer":
-      await api("POST", "/api/timer/stop");
+      return { running: await store.running() };
+    case "startTimer": {
+      const running = await store.running();
+      if (running) return { running };
+      const entry = { id: uuid(), start: new Date().toISOString(), end: null };
+      store.put(entry);
+      return { running: entry };
+    }
+    case "stopTimer": {
+      const running = await store.running();
+      if (running) store.put({ ...running, end: new Date().toISOString() });
       return { running: null };
+    }
     case "discardTimer": {
-      const { running } = await api<Timer>("GET", "/api/timer");
-      if (running) await api("DELETE", `/api/entries/${running.id}`);
+      const running = await store.running();
+      if (running) store.remove(running.id);
       return { running: null };
     }
     case "listEntries":
-      return api("GET", `/api/entries?${rangeQuery(params["startDate"]!, params["endDate"]!)}`);
+      return store.list(...isoRange(params["startDate"]!, params["endDate"]!));
     case "saveEntry": {
-      const body = { start: params["start"], end: params["end"] ?? null };
-      return params["id"]
-        ? api("PATCH", `/api/entries/${params["id"]}`, body)
-        : api("POST", "/api/entries", body);
+      const entry = {
+        id: params["id"] ?? uuid(),
+        start: params["start"]!,
+        end: params["end"] ?? null,
+      };
+      store.put(entry);
+      return entry;
     }
     case "deleteEntry":
-      return api("DELETE", `/api/entries/${params["id"]}`);
+      store.remove(params["id"]!);
+      return null;
     case "analyzeOvertime": {
       const { startDate, endDate } = params as { startDate: string; endDate: string };
-      const entries = await api<TrackedEntry[]>(
-        "GET",
-        `/api/entries?${rangeQuery(startDate, endDate)}`,
-      );
+      const entries = await store.list(...isoRange(startDate, endDate));
       return buildOvertime(secondsPerDay(entries), startDate, endDate);
     }
     default:
@@ -149,6 +198,7 @@ setTransport(async (method, params) => {
     return await handle(method, (params ?? {}) as Params);
   } catch (error) {
     if (error instanceof Unauthorized) signOut(error.message);
+    if (error instanceof ServerError && error.status === 401) signOut("Please sign in again.");
     throw error;
   }
 });
@@ -215,6 +265,7 @@ function signOut(message = "") {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(DASHBOARD_CACHE_KEY);
   } catch {}
+  store.clear();
   mainView.hidden = settingsView.hidden = true;
   loginView.hidden = false;
   loginError.textContent = message;
@@ -565,3 +616,19 @@ function showMain() {
 
 if (token()) showMain();
 else signOut();
+
+// Keeps the page working offline and lets browsers install it. Browsers only allow this on
+// HTTPS pages (and localhost).
+if ("serviceWorker" in navigator) {
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  navigator.serviceWorker.register("sw.js").catch((error) => console.error(error));
+  // A new version took over: reload once nothing is being edited.
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController) return;
+    const reload = () => {
+      if (!document.querySelector("dialog[open]")) location.reload();
+    };
+    reload();
+    document.addEventListener("visibilitychange", reload);
+  });
+}
