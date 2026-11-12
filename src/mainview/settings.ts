@@ -107,8 +107,10 @@ export function initializeSettings(onSettingsSaved: () => void, onCancel?: () =>
       ]);
       const secureApiKey = (state?.apiKey ?? "").trim();
       if (secureApiKey) apiKeyInput.value = secureApiKey;
-      dataSource = setup.dataSource;
       onboarding = !setup.configured && setup.dataSource === null;
+      // On first launch the self-hosted server is preselected.
+      dataSource = setup.dataSource ?? "server";
+      if (setup.dataSource === null) void bridge.setDataSource({ dataSource });
       if (setup.configured) {
         isConfigured = true;
         if (trayEnabledCheckbox) {
