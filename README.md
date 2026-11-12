@@ -149,7 +149,9 @@ for the current week. On iOS, use Share → Add to Home Screen to open it like a
 Each user can copy their Clockify history to the server themselves. While an account has no entries,
 the web page offers the import right away; later, open Settings (the gear at the top) → Import. Choose
 Clockify and paste a Clockify API key. The server copies all finished entries from your
-default Clockify workspace. Entries imported before are skipped, so importing twice adds nothing.
+default Clockify workspace, with their project and tags as labels (`project:Bugfixing`, `tag:Meeting`).
+The app doesn't show labels yet, but the server keeps them, the export includes them, and importing
+again adds them to entries copied before. Entries imported before are skipped, so importing twice adds nothing.
 Entries whose time you already tracked on the server (overlapping by more than a minute) are skipped
 too, so nothing is counted twice. A running Clockify timer is not imported. The key is only used for
 the import and not stored. The server needs internet access to reach Clockify.
@@ -158,7 +160,8 @@ the import and not stored. The server needs internet access to reach Clockify.
 
 On the web page, Settings → Export → CSV or JSON downloads all your time entries. The
 CSV has start and end date and time in your browser's time zone, the duration, and the exact times in
-ISO 8601, which most time tracking tools can import. The JSON lists the same entries with their IDs
+ISO 8601, the project and all labels, which most time tracking tools can import. The JSON lists the
+same entries with their IDs and labels
 and works as a backup: Settings → Import → Backup restores it, into the same or another account.
 Entries whose time is already on the server are skipped, so restoring twice adds nothing.
 
@@ -184,7 +187,8 @@ Once connected:
 
 ### API
 
-`POST /api/login` with `{username, password}` returns a session token. All other `/api` requests
+Entries have `labels`: a list of names. A prefix like `project:` or `tag:` gives a label its kind;
+labels are created when first used. `POST /api/login` with `{username, password}` returns a session token. All other `/api` requests
 need it as `Authorization: Bearer <token>`. Times are ISO 8601.
 
 | Request                                               | Purpose                                      |
@@ -194,9 +198,10 @@ need it as `Authorization: Bearer <token>`. Times are ISO 8601.
 | `POST /api/username` `{username}`                     | Change your username                         |
 | `POST /api/password` `{currentPassword, newPassword}` | Change the password; signs out other devices |
 | `GET /api/me`                                         | The signed-in user, and if they have entries |
+| `GET /api/labels`                                     | Your labels (`{id, name, color}`)            |
 | `GET /api/entries?from=…&to=…`                        | Entries overlapping the range                |
-| `POST /api/entries` `{start, end}`                    | Add an entry                                 |
-| `PATCH /api/entries/:id` `{start?, end?}`             | Change an entry                              |
+| `POST /api/entries` `{start, end, labels?}`           | Add an entry                                 |
+| `PATCH /api/entries/:id` `{start?, end?, labels?}`    | Change an entry                              |
 | `DELETE /api/entries/:id`                             | Delete an entry                              |
 | `GET /api/timer`                                      | The running entry, if any                    |
 | `POST /api/timer/start` / `POST /api/timer/stop`      | Start or stop the timer                      |

@@ -49,12 +49,35 @@ if (
 db.run(
   "CREATE UNIQUE INDEX IF NOT EXISTS entries_user_clockify ON entries (user_id, clockify_id) WHERE clockify_id IS NOT NULL",
 );
+// Labels say what an entry was about. A prefix gives them a kind, e.g. "project:Bugfixing" or
+// "tag:Meeting". There is no UI for them yet.
+db.run(`CREATE TABLE IF NOT EXISTS labels (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  color TEXT,
+  clockify_id TEXT
+)`);
+db.run("CREATE UNIQUE INDEX IF NOT EXISTS labels_user_name ON labels (user_id, name)");
+db.run(
+  "CREATE UNIQUE INDEX IF NOT EXISTS labels_user_clockify ON labels (user_id, clockify_id) WHERE clockify_id IS NOT NULL",
+);
+db.run(`CREATE TABLE IF NOT EXISTS entry_labels (
+  entry_id TEXT NOT NULL REFERENCES entries (id) ON DELETE CASCADE,
+  label_id TEXT NOT NULL REFERENCES labels (id) ON DELETE CASCADE,
+  PRIMARY KEY (entry_id, label_id)
+)`);
 
 type User = { id: string; username: string; password_hash: string; created_at: string };
-type Entry = { id: string; start: string; end: string | null };
-type Row = Entry & { user_id: string; updated_at: string };
-
-const toEntry = ({ id, start, end }: Row): Entry => ({ id, start, end });
+type Entry = { id: string; start: string; end: string | null; labels: string[] };
+type Row = { id: string; start: string; end: string | null; user_id: string; updated_at: string };
+type Label = {
+  id: string;
+  user_id: string;
+  name: string;
+  color: string | null;
+  clockify_id: string | null;
+};
 const now = () => new Date().toISOString();
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
@@ -117,7 +140,62 @@ const entries = {
   insertImported: db.query(
     "INSERT INTO entries (id, user_id, start, end, updated_at, clockify_id) VALUES ($id, $user_id, $start, $end, $updated_at, $clockify_id)",
   ),
+  setClockifyId: db.query("UPDATE entries SET clockify_id = $clockify_id WHERE id = $id"),
+  byClockifyId: db.query<Row, { user_id: string; clockify_id: string }>(
+    "SELECT * FROM entries WHERE user_id = $user_id AND clockify_id = $clockify_id",
+  ),
 };
+
+const labels = {
+  all: db.query<Label, { user_id: string }>(
+    "SELECT * FROM labels WHERE user_id = $user_id ORDER BY name",
+  ),
+  byName: db.query<Label, { user_id: string; name: string }>(
+    "SELECT * FROM labels WHERE user_id = $user_id AND name = $name",
+  ),
+  byClockifyId: db.query<Label, { user_id: string; clockify_id: string }>(
+    "SELECT * FROM labels WHERE user_id = $user_id AND clockify_id = $clockify_id",
+  ),
+  insert: db.query(
+    "INSERT INTO labels (id, user_id, name, color, clockify_id) VALUES ($id, $user_id, $name, $color, $clockify_id)",
+  ),
+  update: db.query(
+    "UPDATE labels SET name = $name, color = $color, clockify_id = $clockify_id WHERE id = $id",
+  ),
+  ofEntry: db.query<{ name: string }, { entry_id: string }>(
+    "SELECT labels.name FROM entry_labels JOIN labels ON labels.id = entry_labels.label_id WHERE entry_id = $entry_id ORDER BY labels.name",
+  ),
+  inRange: db.query<
+    { entry_id: string; name: string },
+    { user_id: string; from: string; to: string }
+  >(
+    "SELECT entry_labels.entry_id, labels.name FROM entry_labels JOIN labels ON labels.id = entry_labels.label_id JOIN entries ON entries.id = entry_labels.entry_id WHERE entries.user_id = $user_id AND entries.start < $to AND (entries.end IS NULL OR entries.end > $from) ORDER BY labels.name",
+  ),
+  link: db.query(
+    "INSERT OR IGNORE INTO entry_labels (entry_id, label_id) VALUES ($entry_id, $label_id)",
+  ),
+  unlinkAll: db.query("DELETE FROM entry_labels WHERE entry_id = $entry_id"),
+};
+
+const toEntry = (row: Row, names?: string[]): Entry => ({
+  id: row.id,
+  start: row.start,
+  end: row.end,
+  labels: names ?? labels.ofEntry.all({ entry_id: row.id }).map((label) => label.name),
+});
+
+/** The user's label with this name, created if it doesn't exist yet. */
+function labelId(user_id: string, name: string, color: string | null = null): string {
+  const existing = labels.byName.get({ user_id, name });
+  if (existing) return existing.id;
+  const id = crypto.randomUUID();
+  labels.insert.run({ id, user_id, name, color, clockify_id: null });
+  return id;
+}
+
+function addLabels(user_id: string, entry_id: string, names: string[]) {
+  for (const name of names) labels.link.run({ entry_id, label_id: labelId(user_id, name) });
+}
 
 // ─── User management (CLI) ──────────────────────────────────────────────────
 
@@ -236,7 +314,47 @@ async function login(request: Request) {
 
 // ─── Clockify import ─────────────────────────────────────────────────────────
 
-type ClockifyEntry = { id: string; timeInterval: { start: string; end: string | null } };
+type ClockifyEntry = {
+  id: string;
+  projectId?: string | null;
+  tagIds?: string[] | null;
+  timeInterval: { start: string; end: string | null };
+};
+type ClockifyNamed = { id: string; name: string; color?: string };
+
+/**
+ * Saves Clockify projects and tags as labels ("project:…", "tag:…"), following renames.
+ * Returns the label ID for each "project:<id>" / "tag:<id>".
+ */
+function saveClockifyLabels(
+  user_id: string,
+  kinds: { kind: string; found: ClockifyNamed[] }[],
+): Map<string, string> {
+  const ids = new Map<string, string>();
+  db.transaction(() => {
+    for (const { kind, found } of kinds) {
+      for (const item of found) {
+        const clockify_id = `${kind}:${item.id}`;
+        const name = `${kind}:${item.name}`;
+        const color = item.color ?? null;
+        const linked = labels.byClockifyId.get({ user_id, clockify_id });
+        const named = labels.byName.get({ user_id, name });
+        const label = linked ?? named;
+        if (label) {
+          // Keep the old name when another label already has the new one.
+          const free = !named || named.id === label.id;
+          labels.update.run({ id: label.id, name: free ? name : label.name, color, clockify_id });
+          ids.set(clockify_id, label.id);
+        } else {
+          const id = crypto.randomUUID();
+          labels.insert.run({ id, user_id, name, color, clockify_id });
+          ids.set(clockify_id, id);
+        }
+      }
+    }
+  })();
+  return ids;
+}
 
 /** Reports what the import is doing; `retryAt` adds a countdown. */
 type Progress = (message: string, retryAt?: number) => void;
@@ -305,10 +423,12 @@ function overlapsAny(others: Row[], start: string, end: string): boolean {
 }
 
 /** Restores entries from this app's JSON export, skipping ones whose time is already here. */
-function restoreBackup(user_id: string, list: { start: string; end: string | null }[]) {
+type BackupEntry = { start: string; end: string | null; labels: string[] };
+
+function restoreBackup(user_id: string, list: BackupEntry[]) {
   const result = { imported: 0, skipped: 0, running: 0 };
   db.transaction(() => {
-    for (const { start, end } of list) {
+    for (const { start, end, labels: names } of list) {
       if (!end) {
         result.running++;
         continue;
@@ -317,7 +437,9 @@ function restoreBackup(user_id: string, list: { start: string; end: string | nul
         result.skipped++;
         continue;
       }
-      entries.insert.run({ id: crypto.randomUUID(), user_id, start, end, updated_at: now() });
+      const id = crypto.randomUUID();
+      entries.insert.run({ id, user_id, start, end, updated_at: now() });
+      addLabels(user_id, id, names);
       result.imported++;
     }
   })();
@@ -341,6 +463,34 @@ async function importFromClockify(
     progress,
     signal,
   );
+  const workspace = `/workspaces/${clockifyUser.defaultWorkspace}`;
+  const loadAll = async <T>(path: string): Promise<T[]> => {
+    const all: T[] = [];
+    for (let page = 1; ; page++) {
+      const batch = await clockify<T[]>(
+        `${workspace}/${path}?page-size=${CLOCKIFY_PAGE_SIZE}&page=${page}`,
+        apiKey,
+        progress,
+        signal,
+      );
+      all.push(...batch);
+      if (batch.length < CLOCKIFY_PAGE_SIZE) return all;
+    }
+  };
+  progress("Loading projects and tags from Clockify…");
+  const labelIds = saveClockifyLabels(user_id, [
+    { kind: "project", found: await loadAll<ClockifyNamed>("projects") },
+    { kind: "tag", found: await loadAll<ClockifyNamed>("tags") },
+  ]);
+  const labelsOf = (entry: ClockifyEntry) =>
+    [
+      entry.projectId ? labelIds.get(`project:${entry.projectId}`) : undefined,
+      ...(entry.tagIds ?? []).map((tagId) => labelIds.get(`tag:${tagId}`)),
+    ].filter((id): id is string => !!id);
+  const link = (entry_id: string, entry: ClockifyEntry) => {
+    for (const label_id of labelsOf(entry)) labels.link.run({ entry_id, label_id });
+  };
+
   const found: ClockifyEntry[] = [];
   for (let page = 1; ; page++) {
     progress(
@@ -349,7 +499,7 @@ async function importFromClockify(
         : "Loading entries from Clockify…",
     );
     const batch = await clockify<ClockifyEntry[]>(
-      `/workspaces/${clockifyUser.defaultWorkspace}/user/${clockifyUser.id}/time-entries?page-size=${CLOCKIFY_PAGE_SIZE}&page=${page}`,
+      `${workspace}/user/${clockifyUser.id}/time-entries?page-size=${CLOCKIFY_PAGE_SIZE}&page=${page}`,
       apiKey,
       progress,
       signal,
@@ -364,25 +514,38 @@ async function importFromClockify(
   const alreadyTracked = (start: string, end: string) =>
     overlapsAny(entries.notImportedInRange.all({ user_id, start, end }), start, end);
   db.transaction(() => {
-    for (const { id: clockify_id, timeInterval } of found) {
+    for (const entry of found) {
+      const { id: clockify_id, timeInterval } = entry;
       if (!timeInterval.end) {
         result.running++;
         continue;
       }
       const start = new Date(timeInterval.start).toISOString();
       const end = new Date(timeInterval.end).toISOString();
-      if (imported.has(clockify_id) || end <= start || alreadyTracked(start, end)) {
+      if (imported.has(clockify_id)) {
+        const row = entries.byClockifyId.get({ user_id, clockify_id });
+        if (row) link(row.id, entry);
         result.skipped++;
         continue;
       }
-      entries.insertImported.run({
-        id: crypto.randomUUID(),
-        user_id,
-        start,
-        end,
-        updated_at: now(),
-        clockify_id,
-      });
+      // The same entry copied by an import from before entries remembered their Clockify ID.
+      const copy = entries.notImportedInRange
+        .all({ user_id, start, end })
+        .find((row) => row.start === start && row.end === end);
+      if (copy) {
+        entries.setClockifyId.run({ id: copy.id, clockify_id });
+        link(copy.id, entry);
+        imported.add(clockify_id);
+        result.skipped++;
+        continue;
+      }
+      if (end <= start || alreadyTracked(start, end)) {
+        result.skipped++;
+        continue;
+      }
+      const id = crypto.randomUUID();
+      entries.insertImported.run({ id, user_id, start, end, updated_at: now(), clockify_id });
+      link(id, entry);
       imported.add(clockify_id);
       result.imported++;
     }
@@ -412,10 +575,15 @@ const importers: Record<string, (input: Record<string, unknown>) => ImportRun> =
     if (!Array.isArray(input.entries)) {
       throw new HttpError(400, "This is not a JSON export of this app");
     }
-    const list = input.entries.map((entry: { start?: unknown; end?: unknown }, index) => ({
-      start: instant(entry?.start, `entries[${index}].start`),
-      end: entry?.end == null ? null : instant(entry.end, `entries[${index}].end`),
-    }));
+    const list = input.entries.map(
+      (entry: { start?: unknown; end?: unknown; labels?: unknown }, index): BackupEntry => ({
+        start: instant(entry?.start, `entries[${index}].start`),
+        end: entry?.end == null ? null : instant(entry.end, `entries[${index}].end`),
+        labels: Array.isArray(entry?.labels)
+          ? entry.labels.filter((name): name is string => typeof name === "string" && !!name.trim())
+          : [],
+      }),
+    );
     return async (user_id, progress) => {
       progress(`Restoring ${list.length} entries…`);
       return restoreBackup(user_id, list);
@@ -476,18 +644,40 @@ function streamImport(user_id: string, run: ImportRun, requestSignal: AbortSigna
 function timerApi(user: User) {
   const user_id = user.id;
 
-  function validated(start: string, end: string | null, id: string): Entry {
+  function validated(start: string, end: string | null, id: string, names: string[] = []): Entry {
     if (end !== null && end <= start) throw new HttpError(400, "end must be after start");
     const running = entries.running.get({ user_id });
     if (end === null && running && running.id !== id) {
       throw new HttpError(409, "Another timer is already running");
     }
-    return { id, start, end };
+    return { id, start, end, labels: names };
+  }
+
+  function labelInput(value: unknown): string[] {
+    if (!Array.isArray(value) || value.some((name) => typeof name !== "string")) {
+      throw new HttpError(400, "labels must be a list of names");
+    }
+    const names = [...new Set(value.map((name: string) => name.trim()).filter(Boolean))];
+    if (names.some((name) => name.length > 100)) {
+      throw new HttpError(400, "A label can have at most 100 characters");
+    }
+    return names.sort();
   }
 
   function save(entry: Entry): Entry {
-    const exists = entries.byId.get({ user_id, id: entry.id });
-    (exists ? entries.update : entries.insert).run({ ...entry, user_id, updated_at: now() });
+    const { id, start, end } = entry;
+    db.transaction(() => {
+      const exists = entries.byId.get({ user_id, id });
+      (exists ? entries.update : entries.insert).run({
+        id,
+        start,
+        end,
+        user_id,
+        updated_at: now(),
+      });
+      labels.unlinkAll.run({ entry_id: id });
+      addLabels(user_id, id, entry.labels);
+    })();
     return entry;
   }
 
@@ -529,17 +719,26 @@ function timerApi(user: User) {
       sessions.remove.run({ token_hash: hashToken(bearerToken(request)) });
       return null;
     },
+    "GET /api/labels": () =>
+      labels.all.all({ user_id }).map(({ id, name, color }) => ({ id, name, color })),
     "GET /api/entries": (request) => {
       const params = new URL(request.url).searchParams;
       const from = instant(params.get("from"), "from");
       const to = instant(params.get("to"), "to");
-      return entries.range.all({ user_id, from, to }).map(toEntry);
+      const names = new Map<string, string[]>();
+      for (const { entry_id, name } of labels.inRange.all({ user_id, from, to })) {
+        names.set(entry_id, [...(names.get(entry_id) ?? []), name]);
+      }
+      return entries.range
+        .all({ user_id, from, to })
+        .map((row) => toEntry(row, names.get(row.id) ?? []));
     },
     "POST /api/entries": async (request) => {
       const input = await body(request);
       const start = instant(input.start, "start");
       const end = input.end == null ? null : instant(input.end, "end");
-      return save(validated(start, end, crypto.randomUUID()));
+      const names = "labels" in input ? labelInput(input.labels) : [];
+      return save(validated(start, end, crypto.randomUUID(), names));
     },
     "PATCH /api/entries/:id": async (request, id = "") => {
       const current = find(id);
@@ -550,7 +749,8 @@ function timerApi(user: User) {
         : input.end === null
           ? null
           : instant(input.end, "end");
-      return save(validated(start, end, id));
+      const names = "labels" in input ? labelInput(input.labels) : toEntry(current).labels;
+      return save(validated(start, end, id, names));
     },
     "DELETE /api/entries/:id": (_, id = "") => {
       find(id);
@@ -570,7 +770,7 @@ function timerApi(user: User) {
     "POST /api/timer/stop": () => {
       const running = entries.running.get({ user_id });
       if (!running) throw new HttpError(409, "No timer is running");
-      return save({ id: running.id, start: running.start, end: now() });
+      return save({ ...toEntry(running), end: now() });
     },
     "POST /api/import/:source": async (request, source = "") => {
       const importer = Object.hasOwn(importers, source) ? importers[source] : undefined;
