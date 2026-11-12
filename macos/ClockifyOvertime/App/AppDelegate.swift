@@ -46,12 +46,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     appMenu.addItem(.separator())
     appMenu.addItem(
       NSMenuItem(
-        title: "Hide Clockify Overtime", action: #selector(NSApplication.hide(_:)),
+        title: "Hide Surplus", action: #selector(NSApplication.hide(_:)),
         keyEquivalent: "h"))
     appMenu.addItem(.separator())
     appMenu.addItem(
       NSMenuItem(
-        title: "Quit Clockify Overtime", action: #selector(NSApplication.terminate(_:)),
+        title: "Quit Surplus", action: #selector(NSApplication.terminate(_:)),
         keyEquivalent: "q"))
     mainMenu.addItem(Self.submenuItem(appMenu))
 

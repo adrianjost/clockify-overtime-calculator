@@ -10,6 +10,6 @@
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Clockify Overtime connects to your self-hosted time tracking server.</string>
+	<string>Surplus connects to your self-hosted time tracking server.</string>
 </dict>
 </plist>

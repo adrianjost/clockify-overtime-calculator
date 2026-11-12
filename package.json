@@ -2,7 +2,7 @@
   "name": "clockify-overtime",
   "version": "0.1.0",
   "private": true,
-  "description": "Native macOS menu bar app for Clockify overtime analysis",
+  "description": "Surplus: track your working time and see your overtime balance on the Mac and the web",
   "scripts": {
     "setup": "bun install && bash scripts/setup-hooks.sh",
     "build": "xcodebuild -project macos/ClockifyOvertime.xcodeproj -scheme ClockifyOvertime -configuration Release -derivedDataPath build/DerivedData build",
