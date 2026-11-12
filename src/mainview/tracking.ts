@@ -167,6 +167,9 @@ export function initializeTracking({ alwaysShowEntries = false, assumeEnabled = 
     renderEntries();
   }
 
+  // Days whose stack of entries is opened; all others show one card for the day.
+  const expandedDays = new Set<string>();
+
   function renderEntries() {
     const byDay = new Map<string, TrackedEntry[]>();
     for (const entry of [...entries].sort((a, b) => b.start.localeCompare(a.start))) {
@@ -192,21 +195,52 @@ export function initializeTracking({ alwaysShowEntries = false, assumeEnabled = 
       title.children[1]!.textContent = formatDuration(total);
       const box = document.createElement("div");
       box.className = "group-box";
-      for (const entry of dayEntries) {
-        const row = document.createElement("button");
-        row.type = "button";
-        row.className = "row entry-row";
-        const end = entry.end ? timeOfDay(new Date(entry.end)) : "now";
-        row.innerHTML = `<span class="entry-span"></span><span class="entry-total"></span>`;
-        row.children[0]!.textContent = `${timeOfDay(new Date(entry.start))} – ${end}`;
-        row.children[1]!.textContent = formatDuration(entryMs(entry));
+      const rows = dayEntries.map((entry) => {
+        const row = entryRow(entry.start, entry.end, entryMs(entry));
         row.classList.toggle("is-running", entry.end === null);
         row.addEventListener("click", () => openEditor(entry));
-        box.append(row);
+        return row;
+      });
+      if (rows.length > 1) {
+        // Several entries collapse into one card for the whole day, like a stack of cards.
+        const first = dayEntries[dayEntries.length - 1]!;
+        const last = dayEntries[0]!;
+        const summary = entryRow(first.start, last.end, total);
+        summary.classList.add("entry-stack-summary");
+        summary.classList.toggle("is-running", last.end === null);
+        const count = document.createElement("span");
+        count.className = "entry-count";
+        count.textContent = String(rows.length);
+        summary.children[0]!.prepend(count);
+        const setExpanded = (expanded: boolean) => {
+          section.classList.toggle("is-collapsed", !expanded);
+          summary.setAttribute("aria-expanded", String(expanded));
+          for (const row of rows) row.hidden = !expanded;
+        };
+        setExpanded(expandedDays.has(day));
+        summary.addEventListener("click", () => {
+          if (expandedDays.has(day)) expandedDays.delete(day);
+          else expandedDays.add(day);
+          setExpanded(expandedDays.has(day));
+        });
+        section.classList.add("entry-stack");
+        box.append(summary);
       }
+      box.append(...rows);
       section.append(title, box);
       list.append(section);
     }
+  }
+
+  function entryRow(start: string, end: string | null, ms: number): HTMLButtonElement {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "row entry-row";
+    row.innerHTML = `<span class="entry-span"></span><span class="entry-total"></span>`;
+    const until = end ? timeOfDay(new Date(end)) : "now";
+    row.children[0]!.textContent = `${timeOfDay(new Date(start))} – ${until}`;
+    row.children[1]!.textContent = formatDuration(ms);
+    return row;
   }
 
   moreButton.addEventListener("click", () => {
