@@ -14,9 +14,25 @@ final class AppController {
   private var mainWindow: MainWindowController?
   private var trayRefreshTask: Task<Void, Never>?
 
+  private enum DataSource: String {
+    case clockify, server
+  }
+
+  private var dataSource: DataSource? { preferences.dataSource.flatMap(DataSource.init) }
+  /// The server, while it is the active data source and signed in.
+  private var activeServer: TrackingServer? { dataSource == .server ? server : nil }
+  private var activeApiKey: String? { dataSource == .clockify ? currentApiKey : nil }
+
   func start(launchedAtLogin: Bool) {
     LaunchAtLogin.migrateLegacyLaunchAgent()
     server = Self.loadServer(preferences)
+    if preferences.dataSource == nil {
+      // Before the data source could be chosen, signing in to a server switched to it.
+      preferences.dataSource =
+        server != nil
+        ? DataSource.server.rawValue : Keychain.loadApiKey() != nil ? DataSource.clockify.rawValue : nil
+      preferences.save()
+    }
     if preferences.trayEnabled {
       createStatusItem()
     }
@@ -67,10 +83,15 @@ final class AppController {
       )
       return try json(data)
     case "getSetupState":
-      return try json([
-        "configured": server != nil || Keychain.loadApiKey() != nil,
-        "tracking": server != nil,
-      ])
+      return try json(
+        SetupState(
+          dataSource: preferences.dataSource,
+          configured: activeServer != nil
+            || (dataSource == .clockify && Keychain.loadApiKey() != nil),
+          tracking: activeServer != nil))
+    case "setDataSource":
+      await setDataSource(DataSource(rawValue: params["dataSource"] as? String ?? ""))
+      return nil
     case "getServerSettings":
       return try json(
         ServerSettings(
@@ -85,7 +106,7 @@ final class AppController {
       await signOutOfServer()
       return nil
     case "getTimer":
-      if let server { runningEntry = try await server.runningTimer() }
+      runningEntry = try await activeServer?.runningTimer()
       updateTrayTitle()
       return try json(["running": runningEntry])
     case "startTimer", "stopTimer", "discardTimer":
@@ -139,6 +160,7 @@ final class AppController {
       Keychain.clearApiKey()
       try? await server?.signOut()
       Keychain.clearServerToken()
+      preferences.dataSource = nil
       preferences.serverURL = nil
       preferences.serverUsername = nil
       preferences.save()
@@ -163,7 +185,8 @@ final class AppController {
   private func analyzeFromDashboard(apiKey: String, startDate: PlainDate, endDate: PlainDate)
     async throws -> OvertimeData
   {
-    if let server {
+    if dataSource == .server {
+      let server = try requireServer()
       let data = try await analyze(server: server, startDate: startDate, endDate: endDate)
       preferences.startDate = startDate
       preferences.save()
@@ -219,10 +242,10 @@ final class AppController {
     let year = Calendar.current.component(.year, from: Date())
     let startDate = preferences.startDate ?? String(format: "%04d-01-01", year)
     do {
-      if let server {
+      if let server = activeServer {
         let today = PlainDates.formatLocal(Date())
         _ = try await analyze(server: server, startDate: startDate, endDate: today)
-      } else if let apiKey = currentApiKey {
+      } else if let apiKey = activeApiKey {
         _ = try await analyze(apiKey: apiKey, startDate: startDate, endDate: PlainDates.todayUTC())
       }
     } catch {
@@ -232,7 +255,7 @@ final class AppController {
 
   private func refreshTrayOnLaunch() async {
     currentApiKey = Keychain.loadApiKey()
-    guard server != nil || currentApiKey != nil else { return }
+    guard activeServer != nil || activeApiKey != nil else { return }
     await refreshTray()
     startTrayRefresh()
   }
@@ -248,10 +271,26 @@ final class AppController {
   }
 
   private func requireServer() throws -> TrackingServer {
-    guard let server else {
-      throw ClockifyError(message: "No time tracking server is set up.")
+    guard let server = activeServer else {
+      throw ClockifyError(message: "Sign in to your time tracking server in Settings.")
     }
     return server
+  }
+
+  private struct SetupState: Encodable {
+    let dataSource: String?
+    let configured: Bool
+    let tracking: Bool
+  }
+
+  private func setDataSource(_ source: DataSource?) async {
+    preferences.dataSource = source?.rawValue
+    preferences.save()
+    runningEntry = nil
+    stopTrayRefresh()
+    setOvertimeTitle("--")
+    if activeServer != nil { runningEntry = try? await activeServer?.runningTimer() }
+    await refreshTrayOnLaunch()
   }
 
   private struct ServerSettings: Encodable {
@@ -272,6 +311,7 @@ final class AppController {
     let token = try await TrackingServer.signIn(
       baseURL: baseURL, username: username, password: password)
     try Keychain.storeServerToken(token)
+    preferences.dataSource = DataSource.server.rawValue
     preferences.serverURL = url
     preferences.serverUsername = username
     preferences.save()
@@ -281,7 +321,7 @@ final class AppController {
     startTrayRefresh()
   }
 
-  /// Switches back to Clockify. Keeps the address and username to make signing in again easy.
+  /// Keeps the address and username to make signing in again easy.
   private func signOutOfServer() async {
     try? await server?.signOut()
     Keychain.clearServerToken()
@@ -290,7 +330,6 @@ final class AppController {
     updateTrayTitle()
     stopTrayRefresh()
     setOvertimeTitle("--")
-    await refreshTrayOnLaunch()
   }
 
   private func timerAction(_ action: String) async throws {
@@ -326,7 +365,7 @@ final class AppController {
   }
 
   private func timerMenuItems() -> [NSMenuItem] {
-    guard server != nil else { return [] }
+    guard activeServer != nil else { return [] }
     if let running = runningEntry {
       return [
         MenuAction.item("Stop timer (\(Self.formatElapsed(running.seconds)))", key: "") {
@@ -396,7 +435,7 @@ final class AppController {
   }
 
   private func startTrayRefresh() {
-    guard preferences.trayEnabled, server != nil || currentApiKey != nil else { return }
+    guard preferences.trayEnabled, activeServer != nil || activeApiKey != nil else { return }
     trayRefreshTask?.cancel()
     trayRefreshTask = Task { [weak self] in
       while !Task.isCancelled {

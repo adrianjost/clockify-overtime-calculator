@@ -1,3 +1,4 @@
+import type { DataSource } from "../shared/rpc.ts";
 import { bridge } from "./bridge.ts";
 
 export function initializeSettings(onSettingsSaved: () => void, onCancel?: () => void) {
@@ -58,7 +59,30 @@ export function initializeSettings(onSettingsSaved: () => void, onCancel?: () =>
   }
 
   let isConfigured = false;
+  let dataSource: DataSource | null = null;
+  // Until anything is set up, the settings are the onboarding.
+  let onboarding = true;
+  const sourceInputs = Array.from(
+    document.querySelectorAll<HTMLInputElement>('input[name="data-source"]'),
+  );
+  const clockifySettings = document.querySelector<HTMLElement>("#clockify-settings");
+  const serverSettings = document.querySelector<HTMLElement>("#server-settings");
+  const settingsTitle = document.querySelector<HTMLElement>("#settings-title");
+  const sourceFooter = document.querySelector<HTMLElement>("#data-source-footer");
+
   const applyAuthVisibility = () => {
+    for (const input of sourceInputs) input.checked = input.value === dataSource;
+    if (clockifySettings) clockifySettings.hidden = dataSource !== "clockify";
+    if (serverSettings) serverSettings.hidden = dataSource !== "server";
+    const general = document.querySelector<HTMLElement>("#general-group");
+    if (general) general.hidden = !isConfigured;
+    if (isConfigured) onboarding = false;
+    if (settingsTitle) settingsTitle.textContent = onboarding ? "Welcome" : "Settings";
+    if (sourceFooter) {
+      sourceFooter.textContent = !onboarding
+        ? "Both stay set up, so you can switch at any time."
+        : "Where are your time entries? You can switch later.";
+    }
     if (dangerZone) {
       dangerZone.style.display = isConfigured ? "" : "none";
     }
@@ -83,6 +107,8 @@ export function initializeSettings(onSettingsSaved: () => void, onCancel?: () =>
       ]);
       const secureApiKey = (state?.apiKey ?? "").trim();
       if (secureApiKey) apiKeyInput.value = secureApiKey;
+      dataSource = setup.dataSource;
+      onboarding = !setup.configured && setup.dataSource === null;
       if (setup.configured) {
         isConfigured = true;
         if (trayEnabledCheckbox) {
@@ -98,6 +124,24 @@ export function initializeSettings(onSettingsSaved: () => void, onCancel?: () =>
     }
   })();
 
+  for (const input of sourceInputs) {
+    input.addEventListener("change", async () => {
+      const previous = dataSource;
+      dataSource = input.value as DataSource;
+      applyAuthVisibility();
+      try {
+        await bridge.setDataSource({ dataSource });
+        isConfigured = (await bridge.getSetupState({})).configured;
+        applyAuthVisibility();
+        window.dispatchEvent(new Event("tracking-changed"));
+      } catch (err) {
+        console.error("setDataSource failed:", err);
+        dataSource = previous;
+        applyAuthVisibility();
+      }
+    });
+  }
+
   // Auto-save API key on input change
   apiKeyInput.addEventListener("change", async () => {
     const value = apiKeyInput.value.trim();
@@ -105,6 +149,7 @@ export function initializeSettings(onSettingsSaved: () => void, onCancel?: () =>
       try {
         await bridge.setStoredApiKey({ apiKey: value });
         isConfigured = true;
+        window.dispatchEvent(new Event("tracking-changed"));
         applyAuthVisibility();
         saveStatus.textContent = "✓ Saved";
         saveStatus.className = "save-status is-success";

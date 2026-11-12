@@ -107,7 +107,7 @@ async function handle(method: string, params: Params): Promise<unknown> {
     case "setContentMaxHeight":
       return null;
     case "getSetupState":
-      return { configured: true, tracking: true };
+      return { dataSource: "server", configured: true, tracking: true };
     case "getTimer":
       return api<Timer>("GET", "/api/timer");
     case "startTimer":

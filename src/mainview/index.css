@@ -1039,6 +1039,50 @@ svg {
   color: var(--text-secondary);
 }
 
+.source-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.source-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--group-bg);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
+.source-option:has(input:checked) {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    var(--shadow);
+}
+
+.source-option:has(input:focus-visible) {
+  outline: 2px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  outline-offset: 2px;
+}
+
+.source-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.source-option-title {
+  font-weight: 600;
+}
+
+.source-option-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
 .row {
   display: flex;
   align-items: center;

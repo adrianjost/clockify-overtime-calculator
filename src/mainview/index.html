@@ -25,69 +25,127 @@
               </svg>
               Overview
             </button>
-            <h1>Settings</h1>
+            <h1 id="settings-title">Settings</h1>
           </div>
         </header>
         <div class="settings-scroll">
           <section class="group">
-            <h2 class="group-title">Clockify</h2>
-            <div class="group-box">
-              <div class="row row--stacked">
-                <label for="api-key">API key</label>
-                <input
-                  id="api-key"
-                  type="password"
-                  placeholder="Paste your personal API key"
-                  autocomplete="off"
-                  spellcheck="false"
-                />
-              </div>
+            <h2 class="group-title">Data source</h2>
+            <div class="source-picker" role="radiogroup" aria-label="Data source">
+              <label class="source-option">
+                <input type="radio" name="data-source" value="clockify" />
+                <span class="source-option-title">Clockify</span>
+                <span class="source-option-hint">
+                  Read your time entries from Clockify and keep tracking time there.
+                </span>
+              </label>
+              <label class="source-option">
+                <input type="radio" name="data-source" value="server" />
+                <span class="source-option-title">Self-hosted server</span>
+                <span class="source-option-hint">
+                  Track time in this app and keep the entries on your own server.
+                </span>
+              </label>
             </div>
-            <p class="group-footer">
-              Stored in your Mac's Keychain and only sent to Clockify.
-              <span id="save-status" class="save-status"></span>
+            <p class="group-footer" id="data-source-footer">
+              Both stay set up, so you can switch at any time.
             </p>
           </section>
 
-          <section class="group">
-            <h2 class="group-title">Self-hosted time tracking</h2>
-            <div class="group-box">
-              <div class="row row--stacked">
-                <label for="server-url">Server address</label>
-                <input
-                  id="server-url"
-                  type="url"
-                  placeholder="http://192.168.1.10:8787"
-                  autocomplete="off"
-                  spellcheck="false"
-                />
+          <div id="clockify-settings" hidden>
+            <section class="group">
+              <h2 class="group-title">Clockify</h2>
+              <div class="group-box">
+                <div class="row row--stacked">
+                  <label for="api-key">API key</label>
+                  <input
+                    id="api-key"
+                    type="password"
+                    placeholder="Paste your personal API key"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                </div>
               </div>
-              <div class="row row--stacked">
-                <label for="server-username">Username</label>
-                <input
-                  id="server-username"
-                  type="text"
-                  autocomplete="username"
-                  spellcheck="false"
-                />
-              </div>
-              <div class="row row--stacked" id="server-password-row">
-                <label for="server-password">Password</label>
-                <input id="server-password" type="password" autocomplete="current-password" />
-              </div>
-              <div class="row">
-                <span id="server-signed-in" class="row-label"></span>
-                <button type="button" id="server-sign-in" class="btn">Sign in</button>
-              </div>
-            </div>
-            <p class="group-footer">
-              Optional. While signed in, you track time in this app and entries are stored on your
-              own server instead of being read from Clockify. Sign out to use Clockify again.
-              <span id="server-status" class="save-status"></span>
-            </p>
-          </section>
+              <p class="group-footer">
+                Stored in your Mac's Keychain and only sent to Clockify.
+                <span id="save-status" class="save-status"></span>
+              </p>
+            </section>
 
-          <section class="group">
+            <section class="group">
+              <h2 class="group-title">Getting started</h2>
+              <div class="group-box">
+                <details class="row row--disclosure" open>
+                  <summary>Where do I find my API key?</summary>
+                  <ol>
+                    <li>Sign in at <strong>clockify.me</strong>.</li>
+                    <li>
+                      Click your avatar in the top-right corner and choose
+                      <strong>Preferences</strong>.
+                    </li>
+                    <li>
+                      Open the <strong>Advanced</strong> tab and click
+                      <strong>Manage API keys</strong>.
+                    </li>
+                    <li>
+                      Click <strong>Generate new</strong> and paste the key above. Clockify shows it
+                      only once.
+                    </li>
+                  </ol>
+                </details>
+                <details class="row row--disclosure">
+                  <summary>What does the app read?</summary>
+                  <p>
+                    Only your own profile (to find your workspace) and your time entries for the
+                    selected range. Nothing is ever written back to Clockify.
+                  </p>
+                </details>
+              </div>
+            </section>
+          </div>
+
+          <div id="server-settings" hidden>
+            <section class="group">
+              <h2 class="group-title">Self-hosted server</h2>
+              <div class="group-box">
+                <div class="row row--stacked">
+                  <label for="server-url">Server address</label>
+                  <input
+                    id="server-url"
+                    type="url"
+                    placeholder="http://192.168.1.10:8787"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                </div>
+                <div class="row row--stacked">
+                  <label for="server-username">Username</label>
+                  <input
+                    id="server-username"
+                    type="text"
+                    autocomplete="username"
+                    spellcheck="false"
+                  />
+                </div>
+                <div class="row row--stacked" id="server-password-row">
+                  <label for="server-password">Password</label>
+                  <input id="server-password" type="password" autocomplete="current-password" />
+                </div>
+                <div class="row">
+                  <span id="server-signed-in" class="row-label"></span>
+                  <button type="button" id="server-sign-in" class="btn">Sign in</button>
+                </div>
+              </div>
+              <p class="group-footer">
+                Sign in to the time tracking server you run yourself, for example on a NAS. The
+                README explains how to set one up.
+                <span id="server-status" class="save-status"></span>
+              </p>
+            </section>
+          </div>
+
+          <section class="group" id="general-group" hidden>
             <h2 class="group-title">General</h2>
             <div class="group-box">
               <div class="row" id="launch-at-login-group" hidden>
@@ -101,37 +159,6 @@
                 </label>
                 <input type="checkbox" switch id="tray-enabled" />
               </div>
-            </div>
-          </section>
-
-          <section class="group">
-            <h2 class="group-title">Getting started</h2>
-            <div class="group-box">
-              <details class="row row--disclosure" open>
-                <summary>Where do I find my API key?</summary>
-                <ol>
-                  <li>Sign in at <strong>clockify.me</strong>.</li>
-                  <li>
-                    Click your avatar in the top-right corner and choose
-                    <strong>Preferences</strong>.
-                  </li>
-                  <li>
-                    Open the <strong>Advanced</strong> tab and click
-                    <strong>Manage API keys</strong>.
-                  </li>
-                  <li>
-                    Click <strong>Generate new</strong> and paste the key above. Clockify shows it
-                    only once.
-                  </li>
-                </ol>
-              </details>
-              <details class="row row--disclosure">
-                <summary>What does the app read?</summary>
-                <p>
-                  Only your own profile (to find your workspace) and your time entries for the
-                  selected range. Nothing is ever written back to Clockify.
-                </p>
-              </details>
             </div>
           </section>
 

@@ -9,6 +9,8 @@ export interface OvertimeData {
   }>;
 }
 
+export type DataSource = "clockify" | "server";
+
 /** An entry on the self-hosted time tracking server; ISO 8601 times, `end` null while running. */
 export interface TrackedEntry {
   id: string;
@@ -23,7 +25,11 @@ export type AppRequests = {
     response: OvertimeData;
   };
   closeApp: { params: {}; response: void };
-  getSetupState: { params: {}; response: { configured: boolean; tracking: boolean } };
+  getSetupState: {
+    params: {};
+    response: { dataSource: DataSource | null; configured: boolean; tracking: boolean };
+  };
+  setDataSource: { params: { dataSource: DataSource }; response: void };
   getServerSettings: {
     params: {};
     response: { url: string | null; username: string | null; signedIn: boolean };

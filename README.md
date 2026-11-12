@@ -68,7 +68,7 @@ Other commands:
 There are no prebuilt downloads, so build the app yourself (see Prerequisites and Build), then:
 
 1. Move `Clockify Overtime.app` from `build/DerivedData/Build/Products/Release/` to `/Applications`.
-2. Open it. On first launch it shows the settings.
+2. Open it. On first launch it asks where your time entries are: choose Clockify.
 3. Create a Clockify API key: in Clockify, open your profile menu → Preferences → Advanced →
    Manage API keys → Generate new, and copy the key (it is only shown once).
 4. Paste the key into the API key field. It is stored in the Keychain.
@@ -160,8 +160,9 @@ ISO 8601, which most time tracking tools can import. The JSON lists the same ent
 
 ### Connect the app
 
-In Settings → Self-hosted time tracking, enter the server address (e.g. `http://192.168.1.10:8787`),
-your username and password, and click Sign in. Sign out to switch back to Clockify.
+In Settings, choose Self-hosted server as the data source, enter the server address
+(e.g. `http://192.168.1.10:8787`), your username and password, and click Sign in. The Clockify API key
+stays saved, so you can switch between both data sources at any time.
 
 Plain `http://` works for IP addresses, `.local` names and single-word hostnames on your network.
 Any other hostname needs HTTPS (for example through your NAS's reverse proxy). Use HTTPS when the
