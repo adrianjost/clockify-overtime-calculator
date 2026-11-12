@@ -755,6 +755,8 @@ function setupChartInteraction(container: HTMLDivElement): void {
   }
 
   let pinchBase: DayRange | null = null;
+  // Touch points on the chart, by pointer ID, with their x position.
+  const touches = new Map<number, number>();
 
   // Ctrl/⌘ + wheel zooms, Shift + wheel pans, a horizontal trackpad swipe pans.
   container.addEventListener(
@@ -859,6 +861,8 @@ function setupChartInteraction(container: HTMLDivElement): void {
   const pinchEvent = (e: Event) => e as Event & { scale: number; clientX: number };
   container.addEventListener("gesturestart", (e) => {
     e.preventDefault();
+    // iOS also sends these for a touch pinch, which the pointer handlers below take care of.
+    if (touches.size) return;
     pinch("start", 1, pinchEvent(e).clientX);
   });
   container.addEventListener("gesturechange", (e) => {
@@ -923,19 +927,63 @@ function setupChartInteraction(container: HTMLDivElement): void {
     dispatchRerender();
   });
 
-  // Drag to pan when zoomed in
-  container.addEventListener("pointerdown", (e) => {
-    if (e.button !== 0 || !focusRange) return;
+  // One finger or the mouse drags to pan when zoomed in; two fingers pinch to zoom and pan.
+  let touchPinch: { base: DayRange; day: number; distance: number } | null = null;
+
+  function startDrag(clientX: number) {
+    if (!focusRange) return;
     isDragging = true;
-    dragStartX = e.clientX;
+    dragStartX = clientX;
     dragStartRange = { ...focusRange };
-    container.setPointerCapture(e.pointerId);
     container.style.cursor = "grabbing";
+  }
+
+  function relXOf(clientX: number): number {
+    const plot = plotBox();
+    return Math.max(0, Math.min(1, (clientX - plot.left) / plot.width));
+  }
+
+  function touchPair(): { mid: number; distance: number } {
+    const [a = 0, b = 0] = touches.values();
+    return { mid: (a + b) / 2, distance: Math.max(1, Math.abs(a - b)) };
+  }
+
+  container.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    if (e.pointerType === "touch") {
+      touches.set(e.pointerId, e.clientX);
+      container.setPointerCapture(e.pointerId);
+      if (touches.size === 2) {
+        const len = lastFilledData.length;
+        if (!len) return;
+        isDragging = false;
+        const base = focusRange ?? { start: 0, end: len - 1 };
+        const { mid, distance } = touchPair();
+        const day = base.start + relXOf(mid) * (base.end - base.start + 1);
+        touchPinch = { base, day, distance };
+        return;
+      }
+      if (touches.size > 2) return;
+    } else {
+      container.setPointerCapture(e.pointerId);
+    }
+    startDrag(e.clientX);
   });
 
   container.addEventListener("pointermove", (e) => {
-    if (!isDragging || !dragStartRange) return;
+    if (touches.has(e.pointerId)) touches.set(e.pointerId, e.clientX);
     const len = lastFilledData.length;
+    if (touchPinch && touches.size >= 2) {
+      const { base, day, distance } = touchPinch;
+      const pair = touchPair();
+      const count = base.end - base.start + 1;
+      const newCount = Math.max(14, Math.min(len, (count * distance) / pair.distance));
+      if (newCount > len - 0.5) focusRange = null;
+      else focusRange = clampPan(day - relXOf(pair.mid) * newCount, newCount, len);
+      rerenderNextFrame();
+      return;
+    }
+    if (!isDragging || !dragStartRange) return;
     const visibleCount = dragStartRange.end - dragStartRange.start + 1;
     const deltaDays = (-(e.clientX - dragStartX) * visibleCount) / plotBox().width;
     focusRange = clampPan(dragStartRange.start + deltaDays, visibleCount, len);
@@ -943,7 +991,17 @@ function setupChartInteraction(container: HTMLDivElement): void {
     rerenderNextFrame();
   });
 
-  const endDrag = (_e: PointerEvent) => {
+  const endDrag = (e: PointerEvent) => {
+    if (touches.delete(e.pointerId) && touchPinch) {
+      if (touches.size >= 2) return;
+      touchPinch = null;
+      // The finger still down continues as a drag.
+      const [rest] = touches.values();
+      if (rest !== undefined) {
+        startDrag(rest);
+        return;
+      }
+    }
     if (!isDragging) return;
     isDragging = false;
     dragStartRange = null;
