@@ -8,8 +8,8 @@ Native macOS menu bar app that shows your Clockify overtime.
 - Analyze overtime for a custom date range
 - Zoomable daily/weekly chart with cumulative overtime
 - Menu bar item with periodic overtime updates
-- Optional: track time yourself (start/stop, add and edit entries) and keep the entries on your
-  own server instead of Clockify
+- Track time yourself (start/stop, add and edit entries) and keep the entries on your own server,
+  or read them from Clockify
 - Launch at login
 
 ## How it works
@@ -68,7 +68,8 @@ Other commands:
 There are no prebuilt downloads, so build the app yourself (see Prerequisites and Build), then:
 
 1. Move `Clockify Overtime.app` from `build/DerivedData/Build/Products/Release/` to `/Applications`.
-2. Open it. On first launch it asks where your time entries are: choose Clockify.
+2. Open it. On first launch it asks where your time entries are. The self-hosted server is preselected
+   (see "Self-hosted time tracking" below); to read from Clockify instead, choose Clockify.
 3. Create a Clockify API key: in Clockify, open your profile menu → Preferences → Advanced →
    Manage API keys → Generate new, and copy the key (it is only shown once).
 4. Paste the key into the API key field. It is stored in the Keychain.
@@ -78,10 +79,10 @@ There are no prebuilt downloads, so build the app yourself (see Prerequisites an
 
 To update, pull the latest changes, build again and replace the app in `/Applications`.
 
-## Self-hosted time tracking (optional)
+## Self-hosted time tracking
 
-By default the app reads your time entries from Clockify. Instead, you can track time in the app
-and keep the entries on your own server, for example a NAS. Then you don't need Clockify at all.
+The default: track time in the app and keep the entries on your own server, for example a NAS. Then
+you don't need Clockify at all. The app can also read your time entries from Clockify instead.
 
 ### Run the server
 
