@@ -147,7 +147,7 @@ for the current week. On iOS, use Share → Add to Home Screen to open it like a
 ### Move your entries from Clockify
 
 Each user can copy their Clockify history to the server themselves. While an account has no entries,
-the web page offers the import right away; later, open Settings (at the bottom) → Import. Choose
+the web page offers the import right away; later, open Settings (the gear at the top) → Import. Choose
 Clockify and paste a Clockify API key. The server copies all finished entries from your
 default Clockify workspace. Entries imported before are skipped, so importing twice adds nothing.
 Entries whose time you already tracked on the server (overlapping by more than a minute) are skipped

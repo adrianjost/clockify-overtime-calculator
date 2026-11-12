@@ -493,7 +493,6 @@ let started = false;
 function showMain() {
   showSignedInView();
   const username = localStorage.getItem(USERNAME_KEY) ?? "";
-  document.querySelector("#signed-in-as")!.textContent = `Signed in as ${username} ·`;
   document.querySelector("#settings-username")!.textContent = `Signed in as ${username}`;
   document.querySelector<HTMLInputElement>("#password-username")!.value = username;
   void updateWelcome();
