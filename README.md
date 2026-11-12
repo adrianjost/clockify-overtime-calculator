@@ -132,7 +132,7 @@ The other commands work the same way:
 | `docker compose exec time-tracking bun server.ts user passwd <name>` | Set a new password and sign out all of that person's devices |
 | `docker compose exec time-tracking bun server.ts user remove <name>` | Delete the account and all its time entries                  |
 
-Everyone can also change their own password on the web page, under Settings.
+Everyone can also change their own username and password on the web page, under Settings.
 
 Without Docker Compose, use `docker exec -it <container> bun server.ts user add <name>`. On a NAS
 without SSH, open a terminal for the container in its container manager and run
@@ -191,6 +191,7 @@ need it as `Authorization: Bearer <token>`. Times are ISO 8601.
 | ----------------------------------------------------- | -------------------------------------------- |
 | `POST /api/login` `{username, password}`              | Sign in; returns `{token, username}`         |
 | `POST /api/logout`                                    | End this session                             |
+| `POST /api/username` `{username}`                     | Change your username                         |
 | `POST /api/password` `{currentPassword, newPassword}` | Change the password; signs out other devices |
 | `GET /api/me`                                         | The signed-in user, and if they have entries |
 | `GET /api/entries?from=…&to=…`                        | Entries overlapping the range                |
