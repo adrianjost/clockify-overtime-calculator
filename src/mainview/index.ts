@@ -5,7 +5,6 @@ import { initializeTracking } from "./tracking.ts";
 
 const settingsContainer = document.querySelector("#settings-container") as HTMLDivElement;
 const dashboardContainer = document.querySelector("#dashboard-container") as HTMLDivElement;
-const entriesContainer = document.querySelector("#entries-container") as HTMLDivElement;
 
 if (!settingsContainer || !dashboardContainer) {
   console.error("App containers are missing");
@@ -14,7 +13,7 @@ if (!settingsContainer || !dashboardContainer) {
 }
 
 const showView = (view: HTMLElement) => {
-  for (const container of [settingsContainer, dashboardContainer, entriesContainer]) {
+  for (const container of [settingsContainer, dashboardContainer]) {
     if (container === view) container.style.removeProperty("display");
     else container.style.display = "none";
   }
@@ -26,8 +25,6 @@ const handleNavigation = () => {
   const hash = window.location.hash;
   if (hash === "#settings") {
     showSettings();
-  } else if (hash === "#entries") {
-    showView(entriesContainer);
   } else {
     showDashboard();
   }
@@ -35,12 +32,10 @@ const handleNavigation = () => {
 
 window.addEventListener("hashchange", handleNavigation);
 
-for (const view of [settingsContainer, entriesContainer]) {
-  const scroll = view.querySelector<HTMLElement>(".settings-scroll");
-  scroll?.addEventListener("scroll", () => {
-    view.classList.toggle("is-scrolled", scroll.scrollTop > 0);
-  });
-}
+const settingsScroll = settingsContainer.querySelector<HTMLElement>(".settings-scroll");
+settingsScroll?.addEventListener("scroll", () => {
+  settingsContainer.classList.toggle("is-scrolled", settingsScroll.scrollTop > 0);
+});
 handleNavigation();
 
 try {

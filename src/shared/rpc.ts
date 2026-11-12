@@ -66,6 +66,8 @@ export type AppRequests = {
   setTraySeconds: { params: { enabled: boolean }; response: void };
   getTheme: { params: {}; response: { theme: Theme } };
   setTheme: { params: { theme: Theme }; response: void };
+  getEntriesSidebar: { params: {}; response: { enabled: boolean } };
+  setEntriesSidebar: { params: { enabled: boolean }; response: void };
   getStoredApiKey: { params: {}; response: { apiKey: string | null } };
   setStoredApiKey: { params: { apiKey: string }; response: void };
   clearStoredApiKey: { params: {}; response: void };

@@ -62,7 +62,9 @@ function dayHeading(day: string): string {
 export function initializeTracking({ alwaysShowEntries = false, assumeEnabled = false } = {}) {
   const timerButton = el<HTMLButtonElement>("#timer-button");
   const discardButton = el<HTMLButtonElement>("#timer-discard");
-  const entriesLink = document.querySelector<HTMLAnchorElement>("#entries-link");
+  // The app shows the entries in a sidebar that can be turned off; the web page always shows them.
+  const entriesToggle = document.querySelector<HTMLButtonElement>("#entries-toggle");
+  const sidebar = document.querySelector<HTMLElement>("#entries-sidebar");
   const list = el<HTMLDivElement>("#entries-list");
   const moreButton = el<HTMLButtonElement>("#entries-more");
   const dialog = el<HTMLDialogElement>("#entry-dialog");
@@ -83,6 +85,11 @@ export function initializeTracking({ alwaysShowEntries = false, assumeEnabled = 
   let daysShown = DAYS_PER_PAGE;
   let editing: TrackedEntry | null = null;
   let tick: ReturnType<typeof setInterval> | null = null;
+  let sidebarOpen: boolean | null = null;
+
+  function entriesShown(): boolean {
+    return alwaysShowEntries || (enabled && sidebarOpen === true);
+  }
 
   function notifyChanged() {
     window.dispatchEvent(new Event("tracking-changed"));
@@ -94,7 +101,16 @@ export function initializeTracking({ alwaysShowEntries = false, assumeEnabled = 
     timerButton.hidden = !enabled;
     discardButton.hidden = !enabled || running === null;
     if (!running) resetDiscard();
-    if (entriesLink) entriesLink.hidden = !enabled;
+    if (entriesToggle) {
+      entriesToggle.hidden = !enabled;
+      entriesToggle.setAttribute("aria-pressed", String(sidebarOpen === true));
+      entriesToggle.title = sidebarOpen ? "Hide time entries" : "Show time entries";
+    }
+    if (sidebar && sidebar.hidden === entriesShown()) {
+      sidebar.hidden = !entriesShown();
+      // The chart only redraws for a new width on resize.
+      window.dispatchEvent(new Event("resize"));
+    }
     timerButton.classList.toggle("is-running", running !== null);
     if (running) {
       const elapsed = formatDuration(Date.now() - Date.parse(running.start), true);
@@ -248,8 +264,14 @@ export function initializeTracking({ alwaysShowEntries = false, assumeEnabled = 
     void loadEntries();
   });
   el<HTMLButtonElement>("#add-entry").addEventListener("click", () => openEditor(null));
-  document.querySelector("#entries-back")?.addEventListener("click", () => {
-    location.hash = "";
+  entriesToggle?.addEventListener("click", () => {
+    sidebarOpen = !sidebarOpen;
+    void bridge.setEntriesSidebar({ enabled: sidebarOpen });
+    renderTimer();
+    if (sidebarOpen) {
+      daysShown = DAYS_PER_PAGE;
+      void loadEntries().catch((error) => console.error(error));
+    }
   });
 
   // ─── Editor ────────────────────────────────────────────────────────────
@@ -358,23 +380,17 @@ export function initializeTracking({ alwaysShowEntries = false, assumeEnabled = 
     } catch (error) {
       console.error("Loading the timer failed:", error);
     }
-    renderTimer();
-    if (alwaysShowEntries || location.hash === "#entries") {
-      if (enabled) await loadEntries().catch((error) => console.error(error));
-      else if (!alwaysShowEntries) location.hash = "";
+    if (entriesToggle && sidebarOpen === null) {
+      sidebarOpen = await bridge
+        .getEntriesSidebar({})
+        .then(({ enabled }) => enabled)
+        .catch(() => true);
     }
+    renderTimer();
+    if (entriesShown()) await loadEntries().catch((error) => console.error(error));
   }
 
   window.addEventListener("tracking-changed", () => void refresh());
-  window.addEventListener("hashchange", () => {
-    if (alwaysShowEntries || location.hash !== "#entries") return;
-    if (!enabled) {
-      location.hash = "";
-      return;
-    }
-    daysShown = DAYS_PER_PAGE;
-    void loadEntries().catch((error) => console.error(error));
-  });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") void refresh();
   });

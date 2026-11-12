@@ -178,6 +178,12 @@ final class AppController {
       preferences.save()
       applyTheme()
       return nil
+    case "getEntriesSidebar":
+      return try json(["enabled": preferences.entriesSidebar])
+    case "setEntriesSidebar":
+      preferences.entriesSidebar = params["enabled"] as? Bool ?? true
+      preferences.save()
+      return nil
     case "setTrayEnabled":
       setTrayEnabled(params["enabled"] as? Bool ?? true)
       return nil
