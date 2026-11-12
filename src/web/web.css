@@ -194,3 +194,24 @@ body.web {
   font-size: 13px;
   color: var(--text-secondary);
 }
+
+.welcome {
+  padding: 16px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 8%, var(--group-bg));
+  box-shadow: var(--shadow);
+}
+
+.welcome h2 {
+  margin: 0 0 4px;
+  font-size: 17px;
+}
+
+.welcome p {
+  margin: 0 0 12px;
+  color: var(--text-secondary);
+}
+
+.welcome .link-button {
+  padding: 0;
+}

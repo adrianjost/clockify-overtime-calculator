@@ -307,6 +307,26 @@ importForm.addEventListener("submit", async (event) => {
   }
 });
 
+// Until a user has any entries, the main view offers to import them.
+const welcome = document.querySelector<HTMLElement>("#welcome")!;
+const welcomeDismissedKey = () => `welcome_dismissed:${localStorage.getItem(USERNAME_KEY) ?? ""}`;
+renderSources(document.querySelector<HTMLElement>("#welcome-sources")!);
+document.querySelector("#welcome-dismiss")!.addEventListener("click", () => {
+  localStorage.setItem(welcomeDismissedKey(), "true");
+  welcome.hidden = true;
+});
+
+async function updateWelcome() {
+  if (localStorage.getItem(welcomeDismissedKey())) {
+    welcome.hidden = true;
+    return;
+  }
+  try {
+    const { hasEntries } = await api<{ hasEntries: boolean }>("GET", "/api/me");
+    welcome.hidden = hasEntries;
+  } catch {}
+}
+
 let started = false;
 let refreshSummary = async () => {};
 
@@ -315,11 +335,13 @@ function showMain() {
   mainView.hidden = false;
   document.querySelector("#signed-in-as")!.textContent =
     `Signed in as ${localStorage.getItem(USERNAME_KEY) ?? ""} ·`;
+  void updateWelcome();
   if (started) {
     window.dispatchEvent(new Event("tracking-changed"));
     return;
   }
   started = true;
+  window.addEventListener("tracking-changed", () => void updateWelcome());
 
   const overtimeValue = document.querySelector<HTMLDivElement>("#overtime-value");
   const content = document.querySelector<HTMLDivElement>("#content")!;

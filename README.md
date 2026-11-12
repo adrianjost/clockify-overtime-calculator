@@ -144,8 +144,9 @@ for the current week. On iOS, use Share → Add to Home Screen to open it like a
 
 ### Move your entries from Clockify
 
-Each user can copy their Clockify history to the server themselves: on the web page, tap "Import time
-entries" at the bottom, choose Clockify and paste a Clockify API key. The server copies all finished entries from your
+Each user can copy their Clockify history to the server themselves. While an account has no entries,
+the web page offers the import right away; later, use "Import time entries" at the bottom. Choose
+Clockify and paste a Clockify API key. The server copies all finished entries from your
 default Clockify workspace. Entries imported before are skipped, so importing twice adds nothing.
 Entries whose time you already tracked on the server (overlapping by more than a minute) are skipped
 too, so nothing is counted twice. A running Clockify timer is not imported. The key is only used for
@@ -175,18 +176,18 @@ Once connected:
 `POST /api/login` with `{username, password}` returns a session token. All other `/api` requests
 need it as `Authorization: Bearer <token>`. Times are ISO 8601.
 
-| Request                                          | Purpose                              |
-| ------------------------------------------------ | ------------------------------------ |
-| `POST /api/login` `{username, password}`         | Sign in; returns `{token, username}` |
-| `POST /api/logout`                               | End this session                     |
-| `GET /api/me`                                    | The signed-in user                   |
-| `GET /api/entries?from=…&to=…`                   | Entries overlapping the range        |
-| `POST /api/entries` `{start, end}`               | Add an entry                         |
-| `PATCH /api/entries/:id` `{start?, end?}`        | Change an entry                      |
-| `DELETE /api/entries/:id`                        | Delete an entry                      |
-| `GET /api/timer`                                 | The running entry, if any            |
-| `POST /api/timer/start` / `POST /api/timer/stop` | Start or stop the timer              |
-| `POST /api/import/clockify` `{apiKey}`           | Copy entries from Clockify           |
+| Request                                          | Purpose                                      |
+| ------------------------------------------------ | -------------------------------------------- |
+| `POST /api/login` `{username, password}`         | Sign in; returns `{token, username}`         |
+| `POST /api/logout`                               | End this session                             |
+| `GET /api/me`                                    | The signed-in user, and if they have entries |
+| `GET /api/entries?from=…&to=…`                   | Entries overlapping the range                |
+| `POST /api/entries` `{start, end}`               | Add an entry                                 |
+| `PATCH /api/entries/:id` `{start?, end?}`        | Change an entry                              |
+| `DELETE /api/entries/:id`                        | Delete an entry                              |
+| `GET /api/timer`                                 | The running entry, if any                    |
+| `POST /api/timer/start` / `POST /api/timer/stop` | Start or stop the timer                      |
+| `POST /api/import/clockify` `{apiKey}`           | Copy entries from Clockify                   |
 
 ## Signing and distribution
 
