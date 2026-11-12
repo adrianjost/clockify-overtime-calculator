@@ -105,7 +105,7 @@ type Timer = { running: TrackedEntry | null };
 async function handle(method: string, params: Params): Promise<unknown> {
   switch (method) {
     case "getSetupState":
-      return { configured: true, tracking: true };
+      return { dataSource: "server", configured: true, tracking: true };
     case "getTimer":
       return api<Timer>("GET", "/api/timer");
     case "startTimer":

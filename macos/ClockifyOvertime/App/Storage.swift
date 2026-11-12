@@ -11,8 +11,8 @@ enum Paths {
 struct Preferences: Codable {
   var trayEnabled: Bool = true
   var startDate: PlainDate?
-  /// Optional self-hosted time tracking server. When set, time entries come from there
-  /// instead of Clockify.
+  /// Where time entries come from: "clockify" or "server". Both can be set up at once.
+  var dataSource: String?
   var serverURL: String?
   var serverUsername: String?
 
@@ -22,6 +22,7 @@ struct Preferences: Codable {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     trayEnabled = try container.decodeIfPresent(Bool.self, forKey: .trayEnabled) ?? true
     startDate = try container.decodeIfPresent(PlainDate.self, forKey: .startDate)
+    dataSource = try container.decodeIfPresent(String.self, forKey: .dataSource)
     serverURL = try container.decodeIfPresent(String.self, forKey: .serverURL)
     serverUsername = try container.decodeIfPresent(String.self, forKey: .serverUsername)
   }
