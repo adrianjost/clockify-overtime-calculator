@@ -149,6 +149,11 @@ final class AppController {
     case "closeApp":
       mainWindow?.close()
       return nil
+    case "setContentMinWidth":
+      if let width = params["width"] as? Double {
+        mainWindow?.setPageMinWidth(width)
+      }
+      return nil
     case "setContentMaxHeight":
       if let height = params["height"] as? Double {
         mainWindow?.setPageMaxHeight(height)

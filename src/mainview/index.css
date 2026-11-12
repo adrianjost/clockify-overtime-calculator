@@ -517,12 +517,13 @@ button {
   flex-shrink: 0;
 }
 
+/* The balance never wraps; the week card gives way and wraps its detail instead. */
 .hero-main {
-  min-width: 0;
+  min-width: min-content;
 }
 
 .hero-stat {
-  flex-shrink: 0;
+  min-width: 0;
   margin-bottom: 2px;
   padding: 8px 12px;
   border-radius: var(--radius);
@@ -576,6 +577,7 @@ button {
   line-height: 1.1;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   color: var(--text);
   transition: color 300ms;
 }
@@ -1489,19 +1491,6 @@ input[type="checkbox"] {
   display: none;
 }
 
-/* In a narrow window the sidebar floats over the dashboard instead of squeezing the chart. */
-@media (max-width: 640px) {
-  .entries-sidebar {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 5;
-    width: min(300px, 85%);
-    background: var(--card-solid);
-  }
-}
-
 .entries-sidebar-header {
   display: flex;
   align-items: center;
@@ -1567,12 +1556,18 @@ input[type="checkbox"] {
   position: relative;
 }
 
-.entry-stack .group-box {
-  transition: margin-bottom 150ms;
+.entry-stack {
+  transition: padding-bottom 150ms;
 }
 
-.entry-stack.is-collapsed .group-box {
-  margin-bottom: 10px;
+/* Padding, not a margin on the card: a margin would collapse into the section's own margin. */
+.entry-stack.is-collapsed {
+  padding-bottom: 10px;
+}
+
+.entry-stack .group-box {
+  position: relative;
+  z-index: 1;
 }
 
 .entry-stack::before,

@@ -284,9 +284,10 @@ function renderCharts(data: OvertimeData) {
     const chartsContainer = document.querySelector<HTMLDivElement>(".charts-container");
     let chartHeight = 300; // default
     if (chartsContainer) {
-      const h2 = dailyContainer.parentElement?.querySelector("h2");
-      const h2Height = h2 ? h2.offsetHeight + 8 : 0;
-      const spaceForChart = chartsContainer.clientHeight - h2Height - 16;
+      // The header wraps onto two lines when the legend doesn't fit next to the title.
+      const header = dailyContainer.parentElement?.querySelector<HTMLElement>(".chart-header");
+      const headerHeight = header ? header.offsetHeight + 8 : 0;
+      const spaceForChart = chartsContainer.clientHeight - headerHeight - 16;
       chartHeight = Math.min(MAX_CHART_HEIGHT, Math.max(200, spaceForChart));
       // Don't let the window grow taller than the chart can use.
       const maxContentHeight = Math.ceil(window.innerHeight + MAX_CHART_HEIGHT - spaceForChart);
