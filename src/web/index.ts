@@ -63,12 +63,13 @@ function failure(status: number, error?: string): Error {
 type ImportResult = { imported: number; skipped: number; running: number };
 
 /** The server streams one JSON object per line: progress messages, then the result or an error. */
-async function importFromClockify(
-  apiKey: string,
+async function runImport(
+  source: string,
+  input: Record<string, string>,
   onProgress: (message: string) => void,
   signal: AbortSignal,
 ): Promise<ImportResult> {
-  const response = await request("POST", "/api/import/clockify", { apiKey }, token(), signal);
+  const response = await request("POST", `/api/import/${source}`, input, token(), signal);
   if (!response.ok || !response.body) {
     const json = await response.json().catch(() => null);
     throw failure(response.status, json?.error);
@@ -181,37 +182,115 @@ document.querySelector("#sign-out")!.addEventListener("click", async () => {
   signOut();
 });
 
+type ImportSource = {
+  id: string;
+  name: string;
+  description: string;
+  fields: { name: string; label: string; type: "text" | "password" }[];
+  help: string;
+};
+
+const importSources: ImportSource[] = [
+  {
+    id: "clockify",
+    name: "Clockify",
+    description: "Copies all your Clockify time entries to this server.",
+    fields: [{ name: "apiKey", label: "Clockify API key", type: "password" }],
+    help:
+      "In Clockify: profile menu → Preferences → Advanced → Manage API keys → Generate new. " +
+      "The key is only used for this import and not stored.",
+  },
+];
+
 const importDialog = document.querySelector<HTMLDialogElement>("#import-dialog")!;
-const importKey = document.querySelector<HTMLInputElement>("#import-key")!;
+const importChoose = document.querySelector<HTMLElement>("#import-choose")!;
+const importForm = document.querySelector<HTMLFormElement>("#import-form")!;
+const importFields = document.querySelector<HTMLElement>("#import-fields")!;
 const importResult = document.querySelector<HTMLParagraphElement>("#import-result")!;
 const importSubmit = document.querySelector<HTMLButtonElement>("#import-submit")!;
+let importSource: ImportSource | null = null;
+let importRun: AbortController | null = null;
 
-document.querySelector("#import-open")!.addEventListener("click", () => {
-  importKey.value = "";
+function renderSources(container: HTMLElement) {
+  container.replaceChildren(
+    ...importSources.map((source) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "import-source";
+      button.innerHTML = `<span class="import-source-name"></span><span class="import-source-hint"></span>`;
+      button.children[0]!.textContent = source.name;
+      button.children[1]!.textContent = source.description;
+      button.addEventListener("click", () => openImport(source));
+      return button;
+    }),
+  );
+}
+
+function showImportStep(source: ImportSource | null) {
+  importRun?.abort();
+  importSource = source;
+  importChoose.hidden = source !== null;
+  importForm.hidden = source === null;
   importResult.textContent = "";
   importResult.classList.remove("is-success");
-  importDialog.showModal();
-});
-let importRun: AbortController | null = null;
-document.querySelector("#import-cancel")!.addEventListener("click", () => importDialog.close());
+  if (!source) return;
+  document.querySelector("#import-title")!.textContent = `Import from ${source.name}`;
+  document.querySelector("#import-description")!.textContent = source.description;
+  document.querySelector("#import-help")!.textContent = source.help;
+  importFields.replaceChildren(
+    ...source.fields.map((field) => {
+      const row = document.createElement("div");
+      row.className = "row row--stacked";
+      const label = document.createElement("label");
+      label.htmlFor = `import-field-${field.name}`;
+      label.textContent = field.label;
+      const input = document.createElement("input");
+      input.id = `import-field-${field.name}`;
+      input.name = field.name;
+      input.type = field.type;
+      input.required = true;
+      input.autocomplete = "off";
+      input.spellcheck = false;
+      input.setAttribute("autocapitalize", "none");
+      row.append(label, input);
+      return row;
+    }),
+  );
+}
+
+function openImport(source: ImportSource | null = null) {
+  showImportStep(source);
+  if (!importDialog.open) importDialog.showModal();
+}
+
+renderSources(document.querySelector<HTMLElement>("#import-sources")!);
+document.querySelector("#import-open")!.addEventListener("click", () => openImport());
+document.querySelector("#import-back")!.addEventListener("click", () => showImportStep(null));
+for (const button of Array.from(document.querySelectorAll("[data-import-close]"))) {
+  button.addEventListener("click", () => importDialog.close());
+}
 importDialog.addEventListener("close", () => importRun?.abort());
-document.querySelector("#import-form")!.addEventListener("submit", async (event) => {
+importForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!importSource) return;
+  const source = importSource;
+  const inputs = Array.from(importFields.querySelectorAll("input"));
   importSubmit.disabled = true;
   importResult.classList.add("is-success");
   importResult.textContent = "Importing…";
   const run = (importRun = new AbortController());
   try {
-    const { imported, skipped, running } = await importFromClockify(
-      importKey.value,
+    const { imported, skipped, running } = await runImport(
+      source.id,
+      Object.fromEntries(inputs.map((input) => [input.name, input.value])),
       (message) => (importResult.textContent = message),
       run.signal,
     );
-    importKey.value = "";
+    for (const input of inputs) input.value = "";
     importResult.textContent =
       `Imported ${imported} ${imported === 1 ? "entry" : "entries"}` +
       (skipped ? `, skipped ${skipped} that are already on the server` : "") +
-      (running ? ". A running Clockify timer was not imported." : ".");
+      (running ? `. A running ${source.name} timer was not imported.` : ".");
     window.dispatchEvent(new Event("tracking-changed"));
   } catch (error) {
     if (run.signal.aborted) return;

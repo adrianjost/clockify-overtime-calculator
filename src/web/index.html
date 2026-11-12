@@ -75,7 +75,7 @@
         <span id="signed-in-as"></span>
         <button type="button" id="sign-out" class="link-button">Sign out</button>
         <button type="button" id="import-open" class="link-button web-footer-import">
-          Import from Clockify
+          Import time entries
         </button>
       </footer>
     </main>
@@ -112,33 +112,28 @@
     </dialog>
 
     <dialog id="import-dialog" class="entry-dialog">
-      <form id="import-form">
-        <h2>Import from Clockify</h2>
-        <p class="import-hint">
-          Copies all your Clockify time entries to this server. Entries imported before, and time
-          you already tracked here, are skipped, so importing again doesn't add duplicates.
-        </p>
-        <div class="group-box">
-          <div class="row row--stacked">
-            <label for="import-key">Clockify API key</label>
-            <input
-              id="import-key"
-              type="password"
-              autocomplete="off"
-              autocapitalize="none"
-              spellcheck="false"
-              required
-            />
-          </div>
-        </div>
-        <p class="import-hint">
-          In Clockify: profile menu → Preferences → Advanced → Manage API keys → Generate new. The
-          key is only used for this import and not stored.
-        </p>
-        <p id="import-result" class="entry-error" role="status"></p>
+      <div id="import-choose">
+        <h2>Import time entries</h2>
+        <p class="import-hint">Copy your existing time entries to this server. Where are they?</p>
+        <div class="import-sources" id="import-sources"></div>
         <div class="entry-actions">
           <span class="entry-actions-spacer"></span>
-          <button type="button" id="import-cancel" class="btn">Close</button>
+          <button type="button" class="btn" data-import-close>Close</button>
+        </div>
+      </div>
+      <form id="import-form" hidden>
+        <h2 id="import-title"></h2>
+        <p class="import-hint">
+          <span id="import-description"></span> Entries imported before, and time you already
+          tracked here, are skipped, so importing again doesn't add duplicates.
+        </p>
+        <div class="group-box" id="import-fields"></div>
+        <p class="import-hint" id="import-help"></p>
+        <p id="import-result" class="entry-error" role="status"></p>
+        <div class="entry-actions">
+          <button type="button" id="import-back" class="btn">Back</button>
+          <span class="entry-actions-spacer"></span>
+          <button type="button" class="btn" data-import-close>Close</button>
           <button type="submit" id="import-submit" class="btn btn--primary">Import</button>
         </div>
       </form>
