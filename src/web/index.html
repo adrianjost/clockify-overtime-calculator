@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Overtime" />
+    <link rel="apple-touch-icon" href="icon.png" />
+    <link rel="icon" href="icon.png" />
+    <title>Overtime</title>
+    <link rel="stylesheet" href="index.css" />
+    <link rel="stylesheet" href="web.css" />
+  </head>
+  <body class="web">
+    <main id="login-view" class="web-page" hidden>
+      <h1 class="web-title">Overtime</h1>
+      <form id="login-form" class="group">
+        <div class="group-box">
+          <div class="row row--stacked">
+            <label for="login-username">Username</label>
+            <input
+              id="login-username"
+              type="text"
+              autocomplete="username"
+              autocapitalize="none"
+              spellcheck="false"
+              required
+            />
+          </div>
+          <div class="row row--stacked">
+            <label for="login-password">Password</label>
+            <input id="login-password" type="password" autocomplete="current-password" required />
+          </div>
+        </div>
+        <p class="group-footer"><span id="login-error" class="save-status is-error"></span></p>
+        <button type="submit" class="btn btn--primary btn--block">Sign in</button>
+      </form>
+    </main>
+
+    <main id="main-view" class="web-page" hidden>
+      <header class="web-header">
+        <div class="range-picker" id="range-picker"></div>
+        <span id="web-status" class="last-fetched"></span>
+      </header>
+
+      <section class="hero" id="content" style="display: none">
+        <div class="hero-main">
+          <div class="hero-label">Overtime balance</div>
+          <div class="hero-value" id="overtime-value">0h 0min</div>
+          <div class="hero-mood" id="overtime-mood"></div>
+        </div>
+        <div class="hero-stat" id="week-stat">
+          <div class="hero-label" id="week-stat-label">This week</div>
+          <div class="hero-stat-value" id="week-stat-value"></div>
+          <div class="hero-stat-detail" id="week-stat-detail"></div>
+        </div>
+      </section>
+
+      <button type="button" id="timer-button" class="timer-button" hidden></button>
+
+      <section>
+        <div class="web-entries-header">
+          <h2>Time entries</h2>
+          <button type="button" id="add-entry" class="btn">Add entry</button>
+        </div>
+        <div id="entries-list"></div>
+        <div class="entries-more">
+          <button type="button" id="entries-more" class="btn">Show earlier entries</button>
+        </div>
+      </section>
+
+      <footer class="web-footer">
+        <span id="signed-in-as"></span>
+        <button type="button" id="sign-out" class="link-button">Sign out</button>
+      </footer>
+    </main>
+
+    <dialog id="entry-dialog" class="entry-dialog">
+      <form method="dialog" id="entry-form">
+        <h2 id="entry-dialog-title">Time entry</h2>
+        <div class="group-box">
+          <div class="row">
+            <label for="entry-date">Date</label>
+            <input id="entry-date" type="date" required />
+          </div>
+          <div class="row">
+            <span class="row-label">Time</span>
+            <span class="entry-times">
+              <input id="entry-start" type="time" required aria-label="Start" />
+              <span>–</span>
+              <input id="entry-end" type="time" aria-label="End" />
+            </span>
+          </div>
+          <div class="row">
+            <span class="row-label">Duration</span>
+            <span id="entry-duration" class="entry-duration"></span>
+          </div>
+        </div>
+        <p id="entry-error" class="entry-error" role="alert"></p>
+        <div class="entry-actions">
+          <button type="button" id="entry-delete" class="btn-danger">Delete</button>
+          <span class="entry-actions-spacer"></span>
+          <button type="button" id="entry-cancel" class="btn">Cancel</button>
+          <button type="submit" id="entry-save" class="btn btn--primary">Save</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="index.js"></script>
+  </body>
+</html>

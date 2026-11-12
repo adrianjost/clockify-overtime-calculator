@@ -1,6 +1,8 @@
 services:
   time-tracking:
-    build: .
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
     restart: unless-stopped
     ports:
       - "8787:8080"

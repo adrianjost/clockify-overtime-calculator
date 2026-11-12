@@ -1,0 +1,5 @@
+# Only what server/Dockerfile copies.
+*
+!src
+!server/server.ts
+!macos/ClockifyOvertime/Assets.xcassets/AppIcon.appiconset/icon_256x256@2x.png

@@ -1,0 +1,146 @@
+/* Mobile web UI served by the time tracking server; builds on the app's index.css. */
+
+:root {
+  --page-bg: #ececec;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page-bg: #1e1e1e;
+  }
+}
+
+html,
+body.web {
+  height: auto;
+  min-height: 100%;
+}
+
+body.web {
+  overflow-x: hidden;
+  overflow-y: auto;
+  font-size: 15px;
+  background: var(--page-bg);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.web-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: calc(12px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+}
+
+.web-page[hidden] {
+  display: none;
+}
+
+.web-title {
+  margin: 24px 0 0;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.web-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.web .hero {
+  flex-wrap: wrap;
+}
+
+.web .hero-stat {
+  display: block;
+}
+
+.web .timer-button {
+  justify-content: center;
+  width: 100%;
+  height: 56px;
+  border-radius: 14px;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.web .timer-button .timer-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.web .timer-button .timer-icon--start {
+  width: 13px;
+  height: 16px;
+}
+
+.web-entries-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.web-entries-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.web .btn {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 8px;
+}
+
+.web .btn--block {
+  width: 100%;
+  height: 44px;
+  justify-content: center;
+}
+
+.web .entry-row {
+  min-height: 48px;
+}
+
+.web .group-title {
+  font-size: 14px;
+}
+
+/* Prevents iOS from zooming into focused inputs. */
+.web input {
+  font-size: 16px;
+}
+
+.web .row--stacked input {
+  padding: 8px 10px;
+}
+
+.web .entry-dialog {
+  width: calc(100vw - 24px);
+  max-width: 420px;
+}
+
+.web .entry-times input {
+  min-width: 0;
+}
+
+.web-footer {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-secondary);
+}
+
+.link-button {
+  border: none;
+  background: none;
+  color: var(--accent);
+}
+
+.web code {
+  font-size: 0.95em;
+}
