@@ -44,6 +44,11 @@ body.web {
   gap: 18px;
 }
 
+.web .charts-container {
+  flex: none;
+  height: 240px;
+}
+
 /* Side by side on wide screens: the overview stays in view while the entries scroll. */
 @media (min-width: 900px) {
   .web-main {
@@ -61,6 +66,10 @@ body.web {
   .web-overview {
     position: sticky;
     top: 16px;
+  }
+
+  .web .charts-container {
+    height: 340px;
   }
 }
 

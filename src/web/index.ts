@@ -1,8 +1,7 @@
 import type { TrackedEntry } from "../shared/rpc.ts";
 import { buildOvertime, localMidnight, secondsPerDay } from "../shared/overtime.ts";
-import { bridge, setTransport } from "../mainview/bridge.ts";
-import { renderOvertimeSummary } from "../mainview/overtime-summary.ts";
-import { initRangePicker } from "../mainview/range-picker.ts";
+import { setTransport } from "../mainview/bridge.ts";
+import { initializeDashboard } from "../mainview/dashboard.ts";
 import { initializeTracking } from "../mainview/tracking.ts";
 
 // The mobile web UI served by the time tracking server. It reuses the app's views and talks to
@@ -10,7 +9,6 @@ import { initializeTracking } from "../mainview/tracking.ts";
 
 const TOKEN_KEY = "server_session";
 const USERNAME_KEY = "server_username";
-const REFRESH_MS = 60 * 1000;
 
 const loginView = document.querySelector<HTMLElement>("#login-view")!;
 const mainView = document.querySelector<HTMLElement>("#main-view")!;
@@ -18,7 +16,6 @@ const loginForm = document.querySelector<HTMLFormElement>("#login-form")!;
 const loginUsername = document.querySelector<HTMLInputElement>("#login-username")!;
 const loginPassword = document.querySelector<HTMLInputElement>("#login-password")!;
 const loginError = document.querySelector<HTMLSpanElement>("#login-error")!;
-const status = document.querySelector<HTMLSpanElement>("#web-status")!;
 
 class Unauthorized extends Error {}
 
@@ -105,6 +102,10 @@ type Timer = { running: TrackedEntry | null };
 
 async function handle(method: string, params: Params): Promise<unknown> {
   switch (method) {
+    case "getStoredApiKey":
+      return { apiKey: null };
+    case "setContentMaxHeight":
+      return null;
     case "getSetupState":
       return { configured: true, tracking: true };
     case "getTimer":
@@ -328,7 +329,6 @@ async function updateWelcome() {
 }
 
 let started = false;
-let refreshSummary = async () => {};
 
 function showMain() {
   loginView.hidden = true;
@@ -343,35 +343,8 @@ function showMain() {
   started = true;
   window.addEventListener("tracking-changed", () => void updateWelcome());
 
-  const overtimeValue = document.querySelector<HTMLDivElement>("#overtime-value");
-  const content = document.querySelector<HTMLDivElement>("#content")!;
-  const picker = initRangePicker(document.querySelector<HTMLElement>("#range-picker")!, () => {
-    void refreshSummary();
-  });
-
-  refreshSummary = async () => {
-    const { startDate, endDate } = picker.current();
-    try {
-      const data = await bridge.analyzeOvertime({ apiKey: "", startDate, endDate });
-      renderOvertimeSummary(data, overtimeValue);
-      content.style.removeProperty("display");
-      status.textContent = "";
-    } catch (error) {
-      if (!(error instanceof Unauthorized)) {
-        status.textContent = error instanceof Error ? error.message : String(error);
-      }
-    }
-  };
-
+  initializeDashboard(() => {});
   initializeTracking({ alwaysShowEntries: true });
-  window.addEventListener("tracking-changed", () => void refreshSummary());
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") void refreshSummary();
-  });
-  setInterval(() => {
-    if (document.visibilityState === "visible") void refreshSummary();
-  }, REFRESH_MS);
-  void refreshSummary();
 }
 
 if (token()) showMain();
