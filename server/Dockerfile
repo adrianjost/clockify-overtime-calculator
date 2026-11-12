@@ -6,7 +6,7 @@ WORKDIR /src
 COPY src ./src
 COPY macos/ClockifyOvertime/Assets.xcassets/AppIcon.appiconset/icon_256x256@2x.png ./icon.png
 RUN bun build src/web/index.ts --target=browser --outdir=/public \
-  && cp src/web/index.html src/web/web.css src/mainview/index.css icon.png /public/
+  && cp src/web/index.html src/web/theme.js src/web/web.css src/mainview/index.css icon.png /public/
 
 FROM oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a
 RUN apk add --no-cache su-exec

@@ -11,6 +11,9 @@ export interface OvertimeData {
 
 export type DataSource = "clockify" | "server";
 
+/** "system" follows the light or dark setting of the operating system. */
+export type Theme = "system" | "light" | "dark";
+
 /** An entry on the self-hosted time tracking server; ISO 8601 times, `end` null while running. */
 export interface TrackedEntry {
   id: string;
@@ -61,6 +64,8 @@ export type AppRequests = {
   setTrayEnabled: { params: { enabled: boolean }; response: void };
   getTraySeconds: { params: {}; response: { enabled: boolean } };
   setTraySeconds: { params: { enabled: boolean }; response: void };
+  getTheme: { params: {}; response: { theme: Theme } };
+  setTheme: { params: { theme: Theme }; response: void };
   getStoredApiKey: { params: {}; response: { apiKey: string | null } };
   setStoredApiKey: { params: { apiKey: string }; response: void };
   clearStoredApiKey: { params: {}; response: void };

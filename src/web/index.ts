@@ -3,6 +3,7 @@ import { buildOvertime, localMidnight, secondsPerDay } from "../shared/overtime.
 import { setTransport } from "../mainview/bridge.ts";
 import { DASHBOARD_CACHE_KEY, initializeDashboard } from "../mainview/dashboard.ts";
 import { initializeTracking } from "../mainview/tracking.ts";
+import { initializeThemePicker } from "../mainview/theme-picker.ts";
 
 // The mobile web UI served by the time tracking server. It reuses the app's views and talks to
 // the server's API directly instead of through the macOS app.
@@ -409,6 +410,20 @@ const welcome = document.querySelector<HTMLElement>("#welcome")!;
 const welcomeDismissedKey = () => `welcome_dismissed:${localStorage.getItem(USERNAME_KEY) ?? ""}`;
 renderSources(document.querySelector<HTMLElement>("#welcome-sources")!);
 renderSources(document.querySelector<HTMLElement>("#settings-import-sources")!);
+
+// Kept per browser; theme.js applies it before the page is drawn.
+const THEME_KEY = "theme";
+initializeThemePicker(
+  (document.documentElement.dataset["theme"] as "light" | "dark" | undefined) ?? "system",
+  (theme) => {
+    try {
+      if (theme === "system") localStorage.removeItem(THEME_KEY);
+      else localStorage.setItem(THEME_KEY, theme);
+    } catch {}
+    if (theme === "system") delete document.documentElement.dataset["theme"];
+    else document.documentElement.dataset["theme"] = theme;
+  },
+);
 document.querySelector("#welcome-dismiss")!.addEventListener("click", () => {
   localStorage.setItem(welcomeDismissedKey(), "true");
   welcome.hidden = true;
