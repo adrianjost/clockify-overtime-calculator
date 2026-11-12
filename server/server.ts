@@ -37,6 +37,18 @@ db.run("CREATE INDEX IF NOT EXISTS entries_user_start ON entries (user_id, start
 db.run(
   "CREATE UNIQUE INDEX IF NOT EXISTS entries_user_running ON entries (user_id) WHERE end IS NULL",
 );
+// The Clockify entry an entry was imported from, so importing again skips it.
+if (
+  !db
+    .query<{ name: string }, []>("PRAGMA table_info(entries)")
+    .all()
+    .some((c) => c.name === "clockify_id")
+) {
+  db.run("ALTER TABLE entries ADD COLUMN clockify_id TEXT");
+}
+db.run(
+  "CREATE UNIQUE INDEX IF NOT EXISTS entries_user_clockify ON entries (user_id, clockify_id) WHERE clockify_id IS NOT NULL",
+);
 
 type User = { id: string; username: string; password_hash: string; created_at: string };
 type Entry = { id: string; start: string; end: string | null };
@@ -85,8 +97,15 @@ const entries = {
     "UPDATE entries SET start = $start, end = $end, updated_at = $updated_at WHERE id = $id AND user_id = $user_id",
   ),
   remove: db.query("DELETE FROM entries WHERE id = $id AND user_id = $user_id"),
-  overlapping: db.query<{ id: string }, { user_id: string; start: string; end: string }>(
-    "SELECT id FROM entries WHERE user_id = $user_id AND start < $end AND (end IS NULL OR end > $start) LIMIT 1",
+  clockifyIds: db.query<{ clockify_id: string }, { user_id: string }>(
+    "SELECT clockify_id FROM entries WHERE user_id = $user_id AND clockify_id IS NOT NULL",
+  ),
+  // Entries not imported from Clockify (or imported before clockify_id existed).
+  notImportedInRange: db.query<Row, { user_id: string; start: string; end: string }>(
+    "SELECT * FROM entries WHERE user_id = $user_id AND clockify_id IS NULL AND start < $end AND (end IS NULL OR end > $start)",
+  ),
+  insertImported: db.query(
+    "INSERT INTO entries (id, user_id, start, end, updated_at, clockify_id) VALUES ($id, $user_id, $start, $end, $updated_at, $clockify_id)",
   ),
 };
 
@@ -207,7 +226,7 @@ async function login(request: Request) {
 
 // ─── Clockify import ─────────────────────────────────────────────────────────
 
-type ClockifyEntry = { timeInterval: { start: string; end: string | null } };
+type ClockifyEntry = { id: string; timeInterval: { start: string; end: string | null } };
 
 /** Reports what the import is doing; `retryAt` adds a countdown. */
 type Progress = (message: string, retryAt?: number) => void;
@@ -215,6 +234,9 @@ type Progress = (message: string, retryAt?: number) => void;
 const CLOCKIFY_PAGE_SIZE = 1000;
 const CLOCKIFY_ATTEMPTS = 10;
 const MAX_RETRY_WAIT_SECONDS = 5 * 60;
+// Back-to-back entries often overlap by a few seconds; only a longer overlap means the same time
+// is already on the server.
+const DUPLICATE_OVERLAP_MS = 60 * 1000;
 
 function retryAfterSeconds(response: Response): number | null {
   const header = response.headers.get("retry-after");
@@ -264,7 +286,10 @@ async function clockify<T>(
   }
 }
 
-/** Copies all finished Clockify entries that don't overlap an existing entry. */
+/**
+ * Copies all finished Clockify entries, except ones imported before and ones whose time is
+ * already tracked on the server.
+ */
 async function importFromClockify(
   user_id: string,
   apiKey: string,
@@ -297,19 +322,35 @@ async function importFromClockify(
 
   progress(`Saving ${found.length} entries…`);
   const result = { imported: 0, skipped: 0, running: 0 };
+  const imported = new Set(entries.clockifyIds.all({ user_id }).map((row) => row.clockify_id));
+  const alreadyTracked = (start: string, end: string) =>
+    entries.notImportedInRange.all({ user_id, start, end }).some((other) => {
+      const overlapEnd = Math.min(Date.parse(end), other.end ? Date.parse(other.end) : Date.now());
+      return (
+        overlapEnd - Math.max(Date.parse(start), Date.parse(other.start)) > DUPLICATE_OVERLAP_MS
+      );
+    });
   db.transaction(() => {
-    for (const { timeInterval } of found) {
+    for (const { id: clockify_id, timeInterval } of found) {
       if (!timeInterval.end) {
         result.running++;
         continue;
       }
       const start = new Date(timeInterval.start).toISOString();
       const end = new Date(timeInterval.end).toISOString();
-      if (end <= start || entries.overlapping.get({ user_id, start, end })) {
+      if (imported.has(clockify_id) || end <= start || alreadyTracked(start, end)) {
         result.skipped++;
         continue;
       }
-      entries.insert.run({ id: crypto.randomUUID(), user_id, start, end, updated_at: now() });
+      entries.insertImported.run({
+        id: crypto.randomUUID(),
+        user_id,
+        start,
+        end,
+        updated_at: now(),
+        clockify_id,
+      });
+      imported.add(clockify_id);
       result.imported++;
     }
   })();
