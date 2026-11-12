@@ -28,6 +28,9 @@ let animateZoomFrom: DayRange | null = null;
 // Daily/weekly bars, switched with some hysteresis so zooming near the threshold doesn't flip-flop.
 let useWeeklyBars = false;
 const MAX_CHART_HEIGHT = 400;
+// The last analysis, shown right away on the next start while fresh data loads.
+export const DASHBOARD_CACHE_KEY = "dashboard-cache";
+type CachedAnalysis = { startDate: string; endDate: string; data: OvertimeData };
 // Per mouse wheel notch: zoom by 8%, pan by 5% of the visible range.
 const ZOOM_STEP = 0.92;
 const PAN_STEP = 0.05;
@@ -101,6 +104,12 @@ export function initializeDashboard(onNavigateToSettings: () => void) {
         endDate,
       });
       lastData = data;
+      try {
+        localStorage.setItem(
+          DASHBOARD_CACHE_KEY,
+          JSON.stringify({ startDate, endDate, data } satisfies CachedAnalysis),
+        );
+      } catch {}
       console.log("📊 Analysis complete:", {
         totalHours: data.totalOvertimeHours,
         totalMinutes: data.totalOvertimeMinutes,
@@ -117,6 +126,15 @@ export function initializeDashboard(onNavigateToSettings: () => void) {
       setLoading(false);
       if (lastFetchedEl) lastFetchedEl.textContent = `Error: ${message}`;
     }
+  }
+
+  const cached = readCachedAnalysis(rangePicker.current());
+  if (cached) {
+    lastData = cached;
+    // The numbers are already on screen, so the fresh data replaces them without animation.
+    animateNextRender = false;
+    if (overtimeValue) overtimeValue.dataset["minutes"] = "";
+    renderDashboard(cached, overtimeValue, content);
   }
 
   // Auto-fetch on initial load
@@ -194,6 +212,19 @@ export function initializeDashboard(onNavigateToSettings: () => void) {
   return { runAnalysis };
 }
 
+function readCachedAnalysis(range: { startDate: string; endDate: string }): OvertimeData | null {
+  try {
+    const cached = JSON.parse(
+      localStorage.getItem(DASHBOARD_CACHE_KEY) ?? "null",
+    ) as CachedAnalysis | null;
+    return cached?.startDate === range.startDate && cached.endDate === range.endDate
+      ? cached.data
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function renderDashboard(
   data: OvertimeData,
   overtimeValue: HTMLDivElement | null,
@@ -201,9 +232,8 @@ function renderDashboard(
 ) {
   if (!overtimeValue || !content) return;
 
-  renderOvertimeSummary(data, overtimeValue);
-
   content.style.removeProperty("display");
+  renderOvertimeSummary(data, overtimeValue);
 
   // Render charts
   renderCharts(data);

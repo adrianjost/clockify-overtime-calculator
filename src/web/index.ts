@@ -1,7 +1,7 @@
 import type { TrackedEntry } from "../shared/rpc.ts";
 import { buildOvertime, localMidnight, secondsPerDay } from "../shared/overtime.ts";
 import { setTransport } from "../mainview/bridge.ts";
-import { initializeDashboard } from "../mainview/dashboard.ts";
+import { DASHBOARD_CACHE_KEY, initializeDashboard } from "../mainview/dashboard.ts";
 import { initializeTracking } from "../mainview/tracking.ts";
 
 // The mobile web UI served by the time tracking server. It reuses the app's views and talks to
@@ -212,6 +212,7 @@ passwordForm.addEventListener("submit", async (event) => {
 function signOut(message = "") {
   try {
     localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(DASHBOARD_CACHE_KEY);
   } catch {}
   mainView.hidden = settingsView.hidden = true;
   loginView.hidden = false;
@@ -539,7 +540,7 @@ function showMain() {
   window.addEventListener("tracking-changed", () => void updateWelcome());
 
   initializeDashboard(() => {});
-  initializeTracking({ alwaysShowEntries: true });
+  initializeTracking({ alwaysShowEntries: true, assumeEnabled: true });
 }
 
 if (token()) showMain();

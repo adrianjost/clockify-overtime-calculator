@@ -82,6 +82,9 @@ function countUp(element: HTMLElement, totalMinutes: number, finalText: string) 
     element.textContent = finalText;
     return;
   }
+  // Keep the final width while counting, so the layout around the number doesn't jump.
+  element.textContent = finalText;
+  element.style.minWidth = `${element.getBoundingClientRect().width}px`;
   const duration = 1300;
   const start = performance.now();
   const step = (now: number) => {
@@ -89,6 +92,7 @@ function countUp(element: HTMLElement, totalMinutes: number, finalText: string) 
     const eased = 1 - Math.pow(1 - t, 3);
     element.textContent = t < 1 ? formatMinutes(Math.round(totalMinutes * eased)) : finalText;
     if (t < 1) requestAnimationFrame(step);
+    else element.style.removeProperty("min-width");
   };
   requestAnimationFrame(step);
 }
