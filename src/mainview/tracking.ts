@@ -59,7 +59,7 @@ function dayHeading(day: string): string {
  * Timer button, time entry list and entry editor; only active with a self-hosted server.
  * The web UI shows the list all the time instead of in the #entries view.
  */
-export function initializeTracking({ alwaysShowEntries = false } = {}) {
+export function initializeTracking({ alwaysShowEntries = false, assumeEnabled = false } = {}) {
   const timerButton = el<HTMLButtonElement>("#timer-button");
   const discardButton = el<HTMLButtonElement>("#timer-discard");
   const entriesLink = document.querySelector<HTMLAnchorElement>("#entries-link");
@@ -76,7 +76,8 @@ export function initializeTracking({ alwaysShowEntries = false } = {}) {
   const deleteButton = el<HTMLButtonElement>("#entry-delete");
   const saveButton = el<HTMLButtonElement>("#entry-save");
 
-  let enabled = false;
+  // The web UI always tracks time, so it shows the Start button before the timer has loaded.
+  let enabled = assumeEnabled;
   let running: TrackedEntry | null = null;
   let entries: TrackedEntry[] = [];
   let daysShown = DAYS_PER_PAGE;
@@ -344,6 +345,7 @@ export function initializeTracking({ alwaysShowEntries = false } = {}) {
     if (document.visibilityState === "visible") void refresh();
   });
 
+  renderTimer();
   void refresh();
   return { refresh };
 }
