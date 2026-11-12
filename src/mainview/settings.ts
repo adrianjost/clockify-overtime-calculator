@@ -40,6 +40,25 @@ export function initializeSettings(onSettingsSaved: () => void, onCancel?: () =>
     });
   }
 
+  const traySecondsGroup = document.querySelector<HTMLElement>("#tray-seconds-group");
+  const traySecondsCheckbox = document.querySelector<HTMLInputElement>("#tray-seconds");
+  if (traySecondsCheckbox) {
+    void bridge.getTraySeconds({}).then(({ enabled }) => {
+      traySecondsCheckbox.checked = enabled;
+    });
+    traySecondsCheckbox.addEventListener("change", async () => {
+      const enabled = traySecondsCheckbox.checked;
+      try {
+        await bridge.setTraySeconds({ enabled });
+      } catch (err) {
+        console.error("setTraySeconds failed:", err);
+        traySecondsCheckbox.checked = !enabled;
+      }
+    });
+  }
+  // The seconds only matter while the balance is shown in the menu bar.
+  trayEnabledCheckbox?.addEventListener("change", () => applyAuthVisibility());
+
   // Launch at login toggle — only shown when API key already exists
   const launchAtLoginGroup = document.querySelector<HTMLElement>("#launch-at-login-group");
   const launchAtLoginCheckbox = document.querySelector<HTMLInputElement>("#launch-at-login");
@@ -88,6 +107,9 @@ export function initializeSettings(onSettingsSaved: () => void, onCancel?: () =>
     }
     if (closeBtn) {
       closeBtn.hidden = !isConfigured;
+    }
+    if (traySecondsGroup) {
+      traySecondsGroup.hidden = !isConfigured || !trayEnabledCheckbox?.checked;
     }
     if (trayEnabledGroup) {
       trayEnabledGroup.hidden = !isConfigured;

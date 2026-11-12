@@ -59,6 +59,8 @@ export type AppRequests = {
   setLaunchAtLogin: { params: { enabled: boolean }; response: void };
   getTrayEnabled: { params: {}; response: { enabled: boolean } };
   setTrayEnabled: { params: { enabled: boolean }; response: void };
+  getTraySeconds: { params: {}; response: { enabled: boolean } };
+  setTraySeconds: { params: { enabled: boolean }; response: void };
   getStoredApiKey: { params: {}; response: { apiKey: string | null } };
   setStoredApiKey: { params: { apiKey: string }; response: void };
   clearStoredApiKey: { params: {}; response: void };
