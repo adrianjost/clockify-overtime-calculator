@@ -59,7 +59,8 @@ The app is written to `build/DerivedData/Build/Products/Release/Clockify Overtim
 
 Other commands:
 
-- `bun run typecheck`: type-check the web UI
+- `bun run typecheck`: type-check the web UI and the server
+- `bun run format:check`: check the formatting (CI runs this and the type check on every pull request)
 - `bun run format`: format source
 - `bun run generate-icons`: regenerate the app icon from `icon-source.svg`
 

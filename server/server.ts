@@ -1,11 +1,11 @@
 import { Database } from "bun:sqlite";
 import { createHash, randomBytes } from "node:crypto";
 
-const port = Number(process.env.PORT ?? 8080);
-const dbPath = process.env.DB_PATH ?? "/data/time-tracking.db";
-const clockifyUrl = process.env.CLOCKIFY_API_URL ?? "https://api.clockify.me/api/v1";
+const port = Number(process.env["PORT"] ?? 8080);
+const dbPath = process.env["DB_PATH"] ?? "/data/time-tracking.db";
+const clockifyUrl = process.env["CLOCKIFY_API_URL"] ?? "https://api.clockify.me/api/v1";
 // The mobile web UI, built from src/web (see Dockerfile).
-const publicDir = process.env.PUBLIC_DIR ?? `${import.meta.dir}/public`;
+const publicDir = process.env["PUBLIC_DIR"] ?? `${import.meta.dir}/public`;
 
 // ─── Database ────────────────────────────────────────────────────────────────
 
@@ -276,10 +276,25 @@ function instant(value: unknown, field: string): string {
   return new Date(time).toISOString();
 }
 
-async function body(request: Request): Promise<Record<string, unknown>> {
+type Input = Partial<
+  Record<
+    | "username"
+    | "password"
+    | "currentPassword"
+    | "newPassword"
+    | "apiKey"
+    | "entries"
+    | "start"
+    | "end"
+    | "labels",
+    unknown
+  >
+>;
+
+async function body(request: Request): Promise<Input> {
   try {
     const json = await request.json();
-    if (json && typeof json === "object") return json as Record<string, unknown>;
+    if (json && typeof json === "object") return json as Input;
   } catch {}
   throw new HttpError(400, "Expected a JSON object");
 }
@@ -565,7 +580,7 @@ type ImportRun = (
 ) => Promise<ImportResult>;
 
 /** Each import source checks its input before the import starts streaming. */
-const importers: Record<string, (input: Record<string, unknown>) => ImportRun> = {
+const importers: Record<string, (input: Input) => ImportRun> = {
   clockify: (input) => {
     const apiKey = typeof input.apiKey === "string" ? input.apiKey.trim() : "";
     if (!apiKey) throw new HttpError(400, "apiKey is required");
