@@ -1449,38 +1449,86 @@ input[type="checkbox"] {
   border-radius: 2px;
 }
 
-#entries-link:hover svg {
+#entries-toggle:hover svg {
   animation: none;
 }
 
-.entries-view {
+#entries-toggle[aria-pressed="true"] {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.dashboard-body {
+  position: relative;
+  display: flex;
   flex: 1;
   min-height: 0;
+  gap: 16px;
+}
+
+.dashboard-main {
   display: flex;
   flex-direction: column;
-  margin: 0 -20px -16px;
+  flex: 1;
+  min-width: 0;
+  gap: 14px;
 }
 
-.entries-view.is-scrolled .settings-header {
-  border-bottom-color: var(--separator);
+.entries-sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 280px;
+  flex-shrink: 0;
+  min-height: 0;
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  box-shadow: var(--shadow);
 }
 
-.entries-header {
-  align-items: stretch;
+.entries-sidebar[hidden] {
+  display: none;
 }
 
-.entries-title {
+/* In a narrow window the sidebar floats over the dashboard instead of squeezing the chart. */
+@media (max-width: 640px) {
+  .entries-sidebar {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    width: min(300px, 85%);
+    background: var(--card-solid);
+  }
+}
+
+.entries-sidebar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
+  padding: 10px 12px 8px 14px;
 }
 
-.entries-title h1 {
+.entries-sidebar-header h2 {
   margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.entries-sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 12px 12px;
+}
+
+.entries-sidebar .group {
+  margin-bottom: 14px;
+}
+
+.entries-sidebar .group-title {
+  margin: 0 4px 6px;
 }
 
 .entries-day {

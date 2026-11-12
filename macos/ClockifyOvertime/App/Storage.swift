@@ -14,6 +14,8 @@ struct Preferences: Codable {
   var trayShowsSeconds: Bool = false
   /// "light" or "dark" to override the system appearance; nil follows the system.
   var theme: String?
+  /// Whether the time entries are shown next to the dashboard.
+  var entriesSidebar: Bool = true
   var startDate: PlainDate?
   /// Where time entries come from: "clockify" or "server". Both can be set up at once.
   var dataSource: String?
@@ -28,6 +30,7 @@ struct Preferences: Codable {
     trayShowsSeconds =
       try container.decodeIfPresent(Bool.self, forKey: .trayShowsSeconds) ?? false
     theme = try container.decodeIfPresent(String.self, forKey: .theme)
+    entriesSidebar = try container.decodeIfPresent(Bool.self, forKey: .entriesSidebar) ?? true
     startDate = try container.decodeIfPresent(PlainDate.self, forKey: .startDate)
     dataSource = try container.decodeIfPresent(String.self, forKey: .dataSource)
     serverURL = try container.decodeIfPresent(String.self, forKey: .serverURL)
