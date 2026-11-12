@@ -62,7 +62,7 @@ type ImportResult = { imported: number; skipped: number; running: number };
 /** The server streams one JSON object per line: progress messages, then the result or an error. */
 async function runImport(
   source: string,
-  input: Record<string, string>,
+  input: Record<string, unknown>,
   onProgress: (message: string) => void,
   signal: AbortSignal,
 ): Promise<ImportResult> {
@@ -233,8 +233,10 @@ type ImportSource = {
   id: string;
   name: string;
   description: string;
-  fields: { name: string; label: string; type: "text" | "password" }[];
+  fields: { name: string; label: string; type: "text" | "password" | "file"; accept?: string }[];
   help: string;
+  /** Turns the form's values into the request body; by default they are sent as they are. */
+  toInput?: (values: Record<string, string | File>) => Promise<Record<string, unknown>>;
 };
 
 const importSources: ImportSource[] = [
@@ -246,6 +248,22 @@ const importSources: ImportSource[] = [
     help:
       "In Clockify: profile menu → Preferences → Advanced → Manage API keys → Generate new. " +
       "The key is only used for this import and not stored.",
+  },
+  {
+    id: "backup",
+    name: "Backup",
+    description: "Restores entries from a JSON export of this app.",
+    fields: [
+      { name: "file", label: "JSON export", type: "file", accept: ".json,application/json" },
+    ],
+    help: "Export one under Settings → Export → JSON.",
+    toInput: async ({ file }) => {
+      try {
+        return { entries: JSON.parse(await (file as File).text()).entries };
+      } catch {
+        throw new Error("This file is not a JSON export of this app.");
+      }
+    },
   },
 ];
 
@@ -295,6 +313,7 @@ function showImportStep(source: ImportSource | null) {
       input.id = `import-field-${field.name}`;
       input.name = field.name;
       input.type = field.type;
+      if (field.accept) input.accept = field.accept;
       input.required = true;
       input.autocomplete = "off";
       input.spellcheck = false;
@@ -328,7 +347,11 @@ importForm.addEventListener("submit", async (event) => {
   try {
     const { imported, skipped, running } = await runImport(
       source.id,
-      Object.fromEntries(inputs.map((input) => [input.name, input.value])),
+      await (source.toInput ?? (async (values) => values))(
+        Object.fromEntries(
+          inputs.map((input) => [input.name, input.files?.[0] ?? input.value] as const),
+        ),
+      ),
       (message) => (importResult.textContent = message),
       run.signal,
     );
