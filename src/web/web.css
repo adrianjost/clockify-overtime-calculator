@@ -37,6 +37,33 @@ body.web {
   display: none;
 }
 
+.web-columns,
+.web-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Side by side on wide screens: the overview stays in view while the entries scroll. */
+@media (min-width: 900px) {
+  .web-main {
+    max-width: 1180px;
+    padding-inline: 32px;
+  }
+
+  .web-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(340px, 2fr);
+    gap: 32px;
+    align-items: start;
+  }
+
+  .web-overview {
+    position: sticky;
+    top: 16px;
+  }
+}
+
 .web-title {
   margin: 24px 0 0;
   font-size: 28px;

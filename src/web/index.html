@@ -39,47 +39,53 @@
       </form>
     </main>
 
-    <main id="main-view" class="web-page" hidden>
+    <main id="main-view" class="web-page web-main" hidden>
       <header class="web-header">
         <div class="range-picker" id="range-picker"></div>
         <span id="web-status" class="last-fetched"></span>
       </header>
 
-      <section class="welcome" id="welcome" hidden>
-        <h2>Welcome!</h2>
-        <p>Start the timer below, or bring the time entries you already have:</p>
-        <div class="import-sources" id="welcome-sources"></div>
-        <button type="button" id="welcome-dismiss" class="link-button">Start from scratch</button>
-      </section>
+      <div class="web-columns">
+        <div class="web-overview">
+          <section class="welcome" id="welcome" hidden>
+            <h2>Welcome!</h2>
+            <p>Start the timer below, or bring the time entries you already have:</p>
+            <div class="import-sources" id="welcome-sources"></div>
+            <button type="button" id="welcome-dismiss" class="link-button">
+              Start from scratch
+            </button>
+          </section>
 
-      <section class="hero" id="content" style="display: none">
-        <div class="hero-main">
-          <div class="hero-label">Overtime balance</div>
-          <div class="hero-value" id="overtime-value">0h 0min</div>
-          <div class="hero-mood" id="overtime-mood"></div>
-        </div>
-        <div class="hero-stat" id="week-stat">
-          <div class="hero-label" id="week-stat-label">This week</div>
-          <div class="hero-stat-value" id="week-stat-value"></div>
-          <div class="hero-stat-detail" id="week-stat-detail"></div>
-        </div>
-      </section>
+          <section class="hero" id="content" style="display: none">
+            <div class="hero-main">
+              <div class="hero-label">Overtime balance</div>
+              <div class="hero-value" id="overtime-value">0h 0min</div>
+              <div class="hero-mood" id="overtime-mood"></div>
+            </div>
+            <div class="hero-stat" id="week-stat">
+              <div class="hero-label" id="week-stat-label">This week</div>
+              <div class="hero-stat-value" id="week-stat-value"></div>
+              <div class="hero-stat-detail" id="week-stat-detail"></div>
+            </div>
+          </section>
 
-      <button type="button" id="timer-button" class="timer-button" hidden></button>
-      <button type="button" id="timer-discard" class="btn timer-discard" hidden>
-        Discard timer
-      </button>
+          <button type="button" id="timer-button" class="timer-button" hidden></button>
+          <button type="button" id="timer-discard" class="btn timer-discard" hidden>
+            Discard timer
+          </button>
+        </div>
 
-      <section>
-        <div class="web-entries-header">
-          <h2>Time entries</h2>
-          <button type="button" id="add-entry" class="btn">Add entry</button>
-        </div>
-        <div id="entries-list"></div>
-        <div class="entries-more">
-          <button type="button" id="entries-more" class="btn">Show earlier entries</button>
-        </div>
-      </section>
+        <section class="web-entries">
+          <div class="web-entries-header">
+            <h2>Time entries</h2>
+            <button type="button" id="add-entry" class="btn">Add entry</button>
+          </div>
+          <div id="entries-list"></div>
+          <div class="entries-more">
+            <button type="button" id="entries-more" class="btn">Show earlier entries</button>
+          </div>
+        </section>
+      </div>
 
       <footer class="web-footer">
         <span id="signed-in-as"></span>
