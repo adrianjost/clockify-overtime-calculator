@@ -145,7 +145,7 @@ for the current week. On iOS, use Share → Add to Home Screen to open it like a
 ### Move your entries from Clockify
 
 Each user can copy their Clockify history to the server themselves. While an account has no entries,
-the web page offers the import right away; later, use "Import time entries" at the bottom. Choose
+the web page offers the import right away; later, open Settings (at the bottom) → Import. Choose
 Clockify and paste a Clockify API key. The server copies all finished entries from your
 default Clockify workspace. Entries imported before are skipped, so importing twice adds nothing.
 Entries whose time you already tracked on the server (overlapping by more than a minute) are skipped
@@ -154,7 +154,7 @@ the import and not stored. The server needs internet access to reach Clockify.
 
 ### Export your entries
 
-At the bottom of the web page, "Export all entries as CSV · JSON" downloads all your time entries. The
+On the web page, Settings → Export → CSV or JSON downloads all your time entries. The
 CSV has start and end date and time in your browser's time zone, the duration, and the exact times in
 ISO 8601, which most time tracking tools can import. The JSON lists the same entries with their IDs.
 

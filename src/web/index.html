@@ -105,16 +105,7 @@
 
       <footer class="web-footer">
         <span id="signed-in-as"></span>
-        <button type="button" id="sign-out" class="link-button">Sign out</button>
-        <button type="button" id="import-open" class="link-button web-footer-import">
-          Import time entries
-        </button>
-        <span class="web-footer-export">
-          Export all entries as
-          <button type="button" class="link-button" data-export="csv">CSV</button>
-          ·
-          <button type="button" class="link-button" data-export="json">JSON</button>
-        </span>
+        <a href="#settings" class="link-button">Settings</a>
       </footer>
     </main>
 
@@ -148,6 +139,47 @@
         </div>
       </form>
     </dialog>
+
+    <main id="settings-view" class="web-page web-settings" hidden>
+      <header class="web-settings-header">
+        <a href="#" class="link-button">‹ Overview</a>
+        <h1 class="web-title">Settings</h1>
+      </header>
+
+      <section class="group">
+        <h2 class="group-title">Account</h2>
+        <div class="group-box">
+          <div class="row">
+            <span class="row-label" id="settings-username"></span>
+            <button type="button" id="sign-out" class="btn">Sign out</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="group">
+        <h2 class="group-title">Import</h2>
+        <div class="import-sources" id="settings-import-sources"></div>
+        <p class="group-footer">
+          Entries imported before, and time you already tracked here, are skipped.
+        </p>
+      </section>
+
+      <section class="group">
+        <h2 class="group-title">Export</h2>
+        <div class="group-box">
+          <div class="row">
+            <span class="row-label">
+              All time entries
+              <span class="row-hint">CSV for other tools, JSON as a backup</span>
+            </span>
+            <span class="export-buttons">
+              <button type="button" class="btn" data-export="csv">CSV</button>
+              <button type="button" class="btn" data-export="json">JSON</button>
+            </span>
+          </div>
+        </div>
+      </section>
+    </main>
 
     <dialog id="import-dialog" class="entry-dialog">
       <div id="import-choose">

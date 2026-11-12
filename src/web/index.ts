@@ -152,14 +152,31 @@ setTransport(async (method, params) => {
   }
 });
 
+const settingsView = document.querySelector<HTMLElement>("#settings-view")!;
+
 function signOut(message = "") {
   try {
     localStorage.removeItem(TOKEN_KEY);
   } catch {}
-  mainView.hidden = true;
+  mainView.hidden = settingsView.hidden = true;
   loginView.hidden = false;
   loginError.textContent = message;
 }
+
+/** The overview, or the settings at #settings, once signed in. */
+function showSignedInView() {
+  const settings = location.hash === "#settings";
+  loginView.hidden = true;
+  mainView.hidden = settings;
+  settingsView.hidden = !settings;
+  window.scrollTo(0, 0);
+  // The chart is sized while visible; draw it again after the overview was hidden.
+  if (!settings) window.dispatchEvent(new Event("resize"));
+}
+
+window.addEventListener("hashchange", () => {
+  if (token()) showSignedInView();
+});
 
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -180,6 +197,7 @@ loginForm.addEventListener("submit", async (event) => {
 
 document.querySelector("#sign-out")!.addEventListener("click", async () => {
   await api("POST", "/api/logout").catch(() => {});
+  history.replaceState(null, "", location.pathname);
   signOut();
 });
 
@@ -265,7 +283,6 @@ function openImport(source: ImportSource | null = null) {
 }
 
 renderSources(document.querySelector<HTMLElement>("#import-sources")!);
-document.querySelector("#import-open")!.addEventListener("click", () => openImport());
 document.querySelector("#import-back")!.addEventListener("click", () => showImportStep(null));
 for (const button of Array.from(document.querySelectorAll("[data-import-close]"))) {
   button.addEventListener("click", () => importDialog.close());
@@ -312,6 +329,7 @@ importForm.addEventListener("submit", async (event) => {
 const welcome = document.querySelector<HTMLElement>("#welcome")!;
 const welcomeDismissedKey = () => `welcome_dismissed:${localStorage.getItem(USERNAME_KEY) ?? ""}`;
 renderSources(document.querySelector<HTMLElement>("#welcome-sources")!);
+renderSources(document.querySelector<HTMLElement>("#settings-import-sources")!);
 document.querySelector("#welcome-dismiss")!.addEventListener("click", () => {
   localStorage.setItem(welcomeDismissedKey(), "true");
   welcome.hidden = true;
@@ -422,10 +440,10 @@ for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>("[d
 let started = false;
 
 function showMain() {
-  loginView.hidden = true;
-  mainView.hidden = false;
-  document.querySelector("#signed-in-as")!.textContent =
-    `Signed in as ${localStorage.getItem(USERNAME_KEY) ?? ""} ·`;
+  showSignedInView();
+  const username = localStorage.getItem(USERNAME_KEY) ?? "";
+  document.querySelector("#signed-in-as")!.textContent = `Signed in as ${username} ·`;
+  document.querySelector("#settings-username")!.textContent = `Signed in as ${username}`;
   void updateWelcome();
   if (started) {
     window.dispatchEvent(new Event("tracking-changed"));
