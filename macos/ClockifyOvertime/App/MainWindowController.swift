@@ -4,7 +4,9 @@ import WebKit
 
 /// Hosts the web dashboard. JS calls Swift through `window.webkit.messageHandlers.rpc`,
 /// see `src/mainview/bridge.ts`.
-final class MainWindowController: NSObject, NSWindowDelegate, WKScriptMessageHandlerWithReply {
+final class MainWindowController: NSObject, NSWindowDelegate, WKScriptMessageHandlerWithReply,
+  WKNavigationDelegate, WKUIDelegate
+{
   typealias RequestHandler = (_ method: String, _ params: [String: Any]) async throws -> String?
 
   private static let minSize = NSSize(width: 400, height: 450)
@@ -64,12 +66,16 @@ final class MainWindowController: NSObject, NSWindowDelegate, WKScriptMessageHan
     configuration.userContentController.addScriptMessageHandler(
       self, contentWorld: .page, name: "rpc")
     window.delegate = self
+    webView.navigationDelegate = self
+    webView.uiDelegate = self
     if !window.setFrameUsingName(Self.frameAutosaveName) {
       placeTopRight()
     }
     window.setFrameAutosaveName(Self.frameAutosaveName)
 
-    webView.load(URLRequest(url: URL(string: "\(BundledWebHandler.scheme)://app/index.html")!))
+    webView.load(
+      URLRequest(
+        url: URL(string: "\(BundledWebHandler.scheme)://\(BundledWebHandler.host)/index.html")!))
   }
 
   func show() {
@@ -134,6 +140,13 @@ final class MainWindowController: NSObject, NSWindowDelegate, WKScriptMessageHan
   func userContentController(
     _ userContentController: WKUserContentController, didReceive message: WKScriptMessage
   ) async -> (Any?, String?) {
+    // Only the bundled page may call the app, not another page or frame that ended up in the view.
+    let origin = message.frameInfo.securityOrigin
+    guard message.frameInfo.isMainFrame, origin.protocol == BundledWebHandler.scheme,
+      origin.host == BundledWebHandler.host
+    else {
+      return (nil, "Not allowed")
+    }
     guard let body = message.body as? [String: Any], let method = body["method"] as? String else {
       return (nil, "Invalid request")
     }
@@ -143,6 +156,32 @@ final class MainWindowController: NSObject, NSWindowDelegate, WKScriptMessageHan
     } catch {
       return (nil, error.localizedDescription)
     }
+  }
+
+  /// The window only shows the bundled page; web links open in the default browser.
+  func webView(
+    _ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+    decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void
+  ) {
+    guard let url = navigationAction.request.url else { return decisionHandler(.cancel) }
+    if url.scheme == BundledWebHandler.scheme && url.host == BundledWebHandler.host {
+      return decisionHandler(.allow)
+    }
+    openExternally(url)
+    decisionHandler(.cancel)
+  }
+
+  func webView(
+    _ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+    for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures
+  ) -> WKWebView? {
+    if let url = navigationAction.request.url { openExternally(url) }
+    return nil
+  }
+
+  private func openExternally(_ url: URL) {
+    guard ["http", "https", "mailto"].contains(url.scheme?.lowercased() ?? "") else { return }
+    NSWorkspace.shared.open(url)
   }
 
   private func placeTopRight() {
@@ -163,6 +202,7 @@ final class MainWindowController: NSObject, NSWindowDelegate, WKScriptMessageHan
 /// page a stable origin for localStorage.
 private final class BundledWebHandler: NSObject, WKURLSchemeHandler {
   static let scheme = "app"
+  static let host = "app"
 
   private let root = Bundle.main.resourceURL!.appendingPathComponent("web", isDirectory: true)
 
@@ -171,7 +211,8 @@ private final class BundledWebHandler: NSObject, WKURLSchemeHandler {
     let relativePath = url.path.isEmpty || url.path == "/" ? "index.html" : String(url.path.dropFirst())
     let file = root.appendingPathComponent(relativePath).standardizedFileURL
 
-    guard file.path.hasPrefix(root.standardizedFileURL.path), let data = try? Data(contentsOf: file)
+    guard file.path.hasPrefix(root.standardizedFileURL.path + "/"),
+      let data = try? Data(contentsOf: file)
     else {
       task.didFailWithError(URLError(.fileDoesNotExist))
       return
