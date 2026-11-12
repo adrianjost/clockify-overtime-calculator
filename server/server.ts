@@ -847,6 +847,23 @@ function timerApi(user: User) {
       const names = "labels" in input ? labelNames(input.labels, "labels") : [];
       return save(validated(start, end, crypto.randomUUID(), names));
     },
+    // Creates or replaces an entry under an ID the client picked, so retrying is harmless.
+    "PUT /api/entries/:id": async (request, id = "") => {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+        throw new HttpError(400, "The entry ID must be a UUID");
+      }
+      const current = entries.byId.get({ user_id, id });
+      const input = await body(request);
+      const start = instant(input.start, "start");
+      const end = input.end == null ? null : instant(input.end, "end");
+      const names =
+        "labels" in input
+          ? labelNames(input.labels, "labels")
+          : current
+            ? toEntry(current).labels
+            : [];
+      return save(validated(start, end, id, names));
+    },
     "PATCH /api/entries/:id": async (request, id = "") => {
       const current = find(id);
       const input = await body(request);

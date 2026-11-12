@@ -157,7 +157,16 @@ without SSH, open a terminal for the container in its container manager and run
 
 The server also hosts a mobile web page at its address (e.g. `http://192.168.1.10:8787`). Sign in to
 start and stop the timer, add, edit and delete entries, and see your overtime balance for a range and
-for the current week. On iOS, use Share → Add to Home Screen to open it like an app.
+for the current week.
+
+Install it like an app: on iOS, Share → Add to Home Screen; in Chrome and Edge, the install button in
+the address bar or menu. Once installed, it also opens and works without a connection. Start and
+stop the timer and add, edit or delete entries as usual; the page saves the changes on the device
+and sends them to the server when it can reach it again (a badge at the top shows how many are
+still waiting). While offline, it shows the entries it saw last.
+
+Installing and offline use need HTTPS (for example through your NAS's reverse proxy), as browsers
+only allow them on secure pages. Over plain `http://` the page works as before, online only.
 
 ### Move your entries from Clockify
 
@@ -217,6 +226,7 @@ need it as `Authorization: Bearer <token>`. Request bodies must be JSON with
 | `GET /api/labels`                                     | Your labels (`{id, name, color}`)            |
 | `GET /api/entries?from=…&to=…`                        | Entries overlapping the range                |
 | `POST /api/entries` `{start, end, labels?}`           | Add an entry                                 |
+| `PUT /api/entries/:id` `{start, end, labels?}`        | Add or replace an entry under your own UUID  |
 | `PATCH /api/entries/:id` `{start?, end?, labels?}`    | Change an entry                              |
 | `DELETE /api/entries/:id`                             | Delete an entry                              |
 | `GET /api/timer`                                      | The running entry, if any                    |

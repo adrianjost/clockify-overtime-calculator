@@ -93,6 +93,23 @@ body.web {
   margin-left: auto;
 }
 
+.sync-status {
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--hover);
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.sync-status.is-error {
+  color: var(--negative);
+}
+
+.sync-status[hidden] {
+  display: none;
+}
+
 .web-header .icon-button {
   width: 36px;
   height: 36px;

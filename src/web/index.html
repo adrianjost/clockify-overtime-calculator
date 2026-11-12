@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
     <script src="theme.js"></script>
+    <meta name="theme-color" content="#ececec" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1e1e1e" media="(prefers-color-scheme: dark)" />
+    <link rel="manifest" href="manifest.json" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Overtime" />
@@ -46,6 +49,7 @@
         <div id="last-fetched" class="last-fetched">
           <span id="fetch-spinner" class="fetch-spinner" hidden></span>
         </div>
+        <span id="sync-status" class="sync-status" role="status" hidden></span>
         <a href="#settings" class="icon-button" aria-label="Settings" title="Settings">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path
