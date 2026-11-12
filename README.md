@@ -132,6 +132,8 @@ The other commands work the same way:
 | `docker compose exec time-tracking bun server.ts user passwd <name>` | Set a new password and sign out all of that person's devices |
 | `docker compose exec time-tracking bun server.ts user remove <name>` | Delete the account and all its time entries                  |
 
+Everyone can also change their own password on the web page, under Settings.
+
 Without Docker Compose, use `docker exec -it <container> bun server.ts user add <name>`. On a NAS
 without SSH, open a terminal for the container in its container manager and run
 `bun server.ts user add <name>` there.
@@ -183,18 +185,19 @@ Once connected:
 `POST /api/login` with `{username, password}` returns a session token. All other `/api` requests
 need it as `Authorization: Bearer <token>`. Times are ISO 8601.
 
-| Request                                          | Purpose                                      |
-| ------------------------------------------------ | -------------------------------------------- |
-| `POST /api/login` `{username, password}`         | Sign in; returns `{token, username}`         |
-| `POST /api/logout`                               | End this session                             |
-| `GET /api/me`                                    | The signed-in user, and if they have entries |
-| `GET /api/entries?from=…&to=…`                   | Entries overlapping the range                |
-| `POST /api/entries` `{start, end}`               | Add an entry                                 |
-| `PATCH /api/entries/:id` `{start?, end?}`        | Change an entry                              |
-| `DELETE /api/entries/:id`                        | Delete an entry                              |
-| `GET /api/timer`                                 | The running entry, if any                    |
-| `POST /api/timer/start` / `POST /api/timer/stop` | Start or stop the timer                      |
-| `POST /api/import/clockify` `{apiKey}`           | Copy entries from Clockify                   |
+| Request                                               | Purpose                                      |
+| ----------------------------------------------------- | -------------------------------------------- |
+| `POST /api/login` `{username, password}`              | Sign in; returns `{token, username}`         |
+| `POST /api/logout`                                    | End this session                             |
+| `POST /api/password` `{currentPassword, newPassword}` | Change the password; signs out other devices |
+| `GET /api/me`                                         | The signed-in user, and if they have entries |
+| `GET /api/entries?from=…&to=…`                        | Entries overlapping the range                |
+| `POST /api/entries` `{start, end}`                    | Add an entry                                 |
+| `PATCH /api/entries/:id` `{start?, end?}`             | Change an entry                              |
+| `DELETE /api/entries/:id`                             | Delete an entry                              |
+| `GET /api/timer`                                      | The running entry, if any                    |
+| `POST /api/timer/start` / `POST /api/timer/stop`      | Start or stop the timer                      |
+| `POST /api/import/clockify` `{apiKey}`                | Copy entries from Clockify                   |
 
 ## Signing and distribution
 

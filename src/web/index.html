@@ -156,6 +156,36 @@
         </div>
       </section>
 
+      <form class="group" id="password-form">
+        <h2 class="group-title">Change password</h2>
+        <div class="group-box">
+          <input type="text" autocomplete="username" id="password-username" hidden />
+          <div class="row row--stacked">
+            <label for="password-current">Current password</label>
+            <input id="password-current" type="password" autocomplete="current-password" required />
+          </div>
+          <div class="row row--stacked">
+            <label for="password-new">New password</label>
+            <input
+              id="password-new"
+              type="password"
+              autocomplete="new-password"
+              minlength="8"
+              required
+            />
+          </div>
+          <div class="row row--stacked">
+            <label for="password-repeat">Repeat new password</label>
+            <input id="password-repeat" type="password" autocomplete="new-password" required />
+          </div>
+          <div class="row">
+            <span id="password-status" class="save-status row-label"></span>
+            <button type="submit" class="btn">Change password</button>
+          </div>
+        </div>
+        <p class="group-footer">Signs out your other devices.</p>
+      </form>
+
       <section class="group">
         <h2 class="group-title">Import</h2>
         <div class="import-sources" id="settings-import-sources"></div>
