@@ -437,8 +437,12 @@ function csvValue(value: string) {
 }
 
 /** One row per entry in the browser's time zone, plus ISO times; a running entry has no end. */
+const PROJECT_PREFIX = "project:";
+
 function toCsv(entries: TrackedEntry[]) {
   const header = [
+    "Project",
+    "Labels",
     "Start Date",
     "Start Time",
     "End Date",
@@ -448,11 +452,14 @@ function toCsv(entries: TrackedEntry[]) {
     "Start (ISO 8601)",
     "End (ISO 8601)",
   ];
-  const rows = entries.map(({ start, end }) => {
+  const rows = entries.map(({ start, end, labels = [] }) => {
     const from = new Date(start);
     const to = end ? new Date(end) : null;
     const seconds = to ? Math.round((to.getTime() - from.getTime()) / 1000) : null;
+    const project = labels.find((label) => label.startsWith(PROJECT_PREFIX));
     return [
+      project?.slice(PROJECT_PREFIX.length) ?? "",
+      labels.join("; "),
       localDate(from),
       localTime(from),
       to ? localDate(to) : "",
@@ -481,10 +488,11 @@ async function exportEntries(format: "csv" | "json") {
           {
             exportedAt: new Date().toISOString(),
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            entries: entries.map(({ id, start, end }) => ({
+            entries: entries.map(({ id, start, end, labels = [] }) => ({
               id,
               start,
               end,
+              labels,
               durationSeconds: end
                 ? Math.round((Date.parse(end) - Date.parse(start)) / 1000)
                 : null,

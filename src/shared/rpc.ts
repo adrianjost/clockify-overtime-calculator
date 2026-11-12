@@ -16,6 +16,8 @@ export interface TrackedEntry {
   id: string;
   start: string;
   end: string | null;
+  /** Set by the self-hosted server, e.g. "project:Bugfixing"; not shown anywhere yet. */
+  labels?: string[];
 }
 
 // Requests handled by the native app, see macos/ClockifyOvertime/App/AppController.swift.
