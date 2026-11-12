@@ -6,6 +6,14 @@ const dbPath = process.env["DB_PATH"] ?? "/data/time-tracking.db";
 const clockifyUrl = process.env["CLOCKIFY_API_URL"] ?? "https://api.clockify.me/api/v1";
 // The mobile web UI, built from src/web (see Dockerfile).
 const publicDir = process.env["PUBLIC_DIR"] ?? `${import.meta.dir}/public`;
+// Behind a reverse proxy, the client's address is the last one in X-Forwarded-For.
+const trustProxy = process.env["TRUST_PROXY"] === "true";
+
+const SESSION_IDLE_DAYS = 60;
+const MAX_LABEL_LENGTH = 100;
+const MAX_LABELS_PER_ENTRY = 50;
+const MAX_PASSWORD_LENGTH = 1024;
+const MAX_REQUEST_BYTES = 20 * 1024 * 1024;
 
 // ─── Database ────────────────────────────────────────────────────────────────
 
@@ -79,6 +87,7 @@ type Label = {
   clockify_id: string | null;
 };
 const now = () => new Date().toISOString();
+const sessionCutoff = () => new Date(Date.now() - SESSION_IDLE_DAYS * 86_400_000).toISOString();
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
 const users = {
@@ -96,9 +105,10 @@ const sessions = {
   insert: db.query(
     "INSERT INTO sessions (token_hash, user_id, created_at, last_used_at) VALUES ($token_hash, $user_id, $now, $now)",
   ),
-  user: db.query<User, { token_hash: string }>(
-    "SELECT users.* FROM sessions JOIN users ON users.id = sessions.user_id WHERE token_hash = $token_hash",
+  user: db.query<User, { token_hash: string; cutoff: string }>(
+    "SELECT users.* FROM sessions JOIN users ON users.id = sessions.user_id WHERE token_hash = $token_hash AND last_used_at > $cutoff",
   ),
+  removeIdle: db.query("DELETE FROM sessions WHERE last_used_at <= $cutoff"),
   touch: db.query("UPDATE sessions SET last_used_at = $now WHERE token_hash = $token_hash"),
   remove: db.query("DELETE FROM sessions WHERE token_hash = $token_hash"),
   removeForUser: db.query("DELETE FROM sessions WHERE user_id = $user_id"),
@@ -265,9 +275,24 @@ class HttpError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    readonly headers: Record<string, string> = {},
   ) {
     super(message);
   }
+}
+
+function labelNames(value: unknown, field: string): string[] {
+  if (!Array.isArray(value) || value.some((name) => typeof name !== "string")) {
+    throw new HttpError(400, `${field} must be a list of names`);
+  }
+  const names = [...new Set(value.map((name: string) => name.trim()).filter(Boolean))];
+  if (names.length > MAX_LABELS_PER_ENTRY) {
+    throw new HttpError(400, `An entry can have at most ${MAX_LABELS_PER_ENTRY} labels`);
+  }
+  if (names.some((name) => name.length > MAX_LABEL_LENGTH)) {
+    throw new HttpError(400, `A label can have at most ${MAX_LABEL_LENGTH} characters`);
+  }
+  return names.sort();
 }
 
 function instant(value: unknown, field: string): string {
@@ -307,21 +332,84 @@ function authenticate(request: Request): User | null {
   const token = bearerToken(request);
   if (!token) return null;
   const token_hash = hashToken(token);
-  const user = sessions.user.get({ token_hash });
+  const user = sessions.user.get({ token_hash, cutoff: sessionCutoff() });
   if (user) sessions.touch.run({ token_hash, now: now() });
   return user;
+}
+
+// Each password hash or check uses about 64 MB of memory, so only a few run at once.
+const PASSWORD_SLOTS = 2;
+const MAX_WAITING_FOR_SLOT = 50;
+let busySlots = 0;
+const waitingForSlot: (() => void)[] = [];
+
+async function withPasswordSlot<T>(work: () => Promise<T>): Promise<T> {
+  if (busySlots < PASSWORD_SLOTS) {
+    busySlots++;
+  } else {
+    if (waitingForSlot.length >= MAX_WAITING_FOR_SLOT) {
+      throw new HttpError(503, "The server is busy. Try again in a moment.");
+    }
+    await new Promise<void>((resolve) => waitingForSlot.push(resolve));
+  }
+  try {
+    return await work();
+  } finally {
+    const next = waitingForSlot.shift();
+    if (next) next();
+    else busySlots--;
+  }
+}
+
+// Failed sign-ins per username and per IP address, to slow down password guessing.
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const MAX_FAILURES_PER_USERNAME = 10;
+const MAX_FAILURES_PER_IP = 30;
+const loginFailures = new Map<string, number[]>();
+
+function recentFailures(key: string): number[] {
+  const cutoff = Date.now() - LOGIN_WINDOW_MS;
+  const recent = (loginFailures.get(key) ?? []).filter((time) => time > cutoff);
+  if (recent.length) loginFailures.set(key, recent);
+  else loginFailures.delete(key);
+  return recent;
+}
+
+function checkLoginAllowed(keys: [string, number][]) {
+  for (const [key, max] of keys) {
+    const recent = recentFailures(key);
+    if (recent.length >= max) {
+      const seconds = Math.ceil((recent[0]! + LOGIN_WINDOW_MS - Date.now()) / 1000);
+      throw new HttpError(
+        429,
+        `Too many failed sign-ins. Try again in ${Math.ceil(seconds / 60)} minutes.`,
+        { "retry-after": String(seconds) },
+      );
+    }
+  }
 }
 
 // Verified against a dummy hash for unknown users, so the response time doesn't reveal them.
 const dummyHash = await Bun.password.hash(randomBytes(16).toString("hex"));
 
-async function login(request: Request) {
+async function login(request: Request, ip: string) {
   const input = await body(request);
   const username = typeof input.username === "string" ? input.username.trim() : "";
-  const password = typeof input.password === "string" ? input.password : "";
-  const user = users.byName.get({ username });
-  const valid = await Bun.password.verify(password, user?.password_hash ?? dummyHash);
-  if (!user || !valid) throw new HttpError(401, "Wrong username or password");
+  const password = typeof input.password === "string" ? input.password.trim() : "";
+  const keys: [string, number][] = [
+    [`ip:${ip}`, MAX_FAILURES_PER_IP],
+    [`user:${username.toLowerCase()}`, MAX_FAILURES_PER_USERNAME],
+  ];
+  checkLoginAllowed(keys);
+  const user = username.length <= 64 ? users.byName.get({ username }) : null;
+  const valid =
+    password.length <= MAX_PASSWORD_LENGTH &&
+    (await withPasswordSlot(() => Bun.password.verify(password, user?.password_hash ?? dummyHash)));
+  if (!user || !valid) {
+    for (const [key] of keys) loginFailures.set(key, [...recentFailures(key), Date.now()]);
+    throw new HttpError(401, "Wrong username or password");
+  }
+  loginFailures.delete(`user:${username.toLowerCase()}`);
   const token = randomBytes(32).toString("base64url");
   sessions.insert.run({ token_hash: hashToken(token), user_id: user.id, now: now() });
   return { token, username: user.username };
@@ -594,9 +682,7 @@ const importers: Record<string, (input: Input) => ImportRun> = {
       (entry: { start?: unknown; end?: unknown; labels?: unknown }, index): BackupEntry => ({
         start: instant(entry?.start, `entries[${index}].start`),
         end: entry?.end == null ? null : instant(entry.end, `entries[${index}].end`),
-        labels: Array.isArray(entry?.labels)
-          ? entry.labels.filter((name): name is string => typeof name === "string" && !!name.trim())
-          : [],
+        labels: entry?.labels == null ? [] : labelNames(entry.labels, `entries[${index}].labels`),
       }),
     );
     return async (user_id, progress) => {
@@ -668,17 +754,6 @@ function timerApi(user: User) {
     return { id, start, end, labels: names };
   }
 
-  function labelInput(value: unknown): string[] {
-    if (!Array.isArray(value) || value.some((name) => typeof name !== "string")) {
-      throw new HttpError(400, "labels must be a list of names");
-    }
-    const names = [...new Set(value.map((name: string) => name.trim()).filter(Boolean))];
-    if (names.some((name) => name.length > 100)) {
-      throw new HttpError(400, "A label can have at most 100 characters");
-    }
-    return names.sort();
-  }
-
   function save(entry: Entry): Entry {
     const { id, start, end } = entry;
     db.transaction(() => {
@@ -715,18 +790,29 @@ function timerApi(user: User) {
       }
       const existing = users.byName.get({ username });
       if (existing && existing.id !== user_id) throw new HttpError(409, "This username is taken");
-      users.setUsername.run({ id: user_id, username });
+      try {
+        users.setUsername.run({ id: user_id, username });
+      } catch (error) {
+        if ((error as { code?: string }).code === "SQLITE_CONSTRAINT_UNIQUE") {
+          throw new HttpError(409, "This username is taken");
+        }
+        throw error;
+      }
       return { username };
     },
     "POST /api/password": async (request) => {
       const input = await body(request);
-      const current = typeof input.currentPassword === "string" ? input.currentPassword : "";
+      const current = typeof input.currentPassword === "string" ? input.currentPassword.trim() : "";
       const next = typeof input.newPassword === "string" ? input.newPassword.trim() : "";
-      if (!(await Bun.password.verify(current, user.password_hash))) {
-        throw new HttpError(400, "The current password is wrong");
+      if (next.length < 8 || next.length > MAX_PASSWORD_LENGTH) {
+        throw new HttpError(400, `The new password needs 8 to ${MAX_PASSWORD_LENGTH} characters`);
       }
-      if (next.length < 8) throw new HttpError(400, "The new password needs at least 8 characters");
-      users.setPassword.run({ id: user_id, password_hash: await Bun.password.hash(next) });
+      const valid =
+        current.length <= MAX_PASSWORD_LENGTH &&
+        (await withPasswordSlot(() => Bun.password.verify(current, user.password_hash)));
+      if (!valid) throw new HttpError(400, "The current password is wrong");
+      const password_hash = await withPasswordSlot(() => Bun.password.hash(next));
+      users.setPassword.run({ id: user_id, password_hash });
       sessions.removeOthers.run({ user_id, token_hash: hashToken(bearerToken(request)) });
       return null;
     },
@@ -752,7 +838,7 @@ function timerApi(user: User) {
       const input = await body(request);
       const start = instant(input.start, "start");
       const end = input.end == null ? null : instant(input.end, "end");
-      const names = "labels" in input ? labelInput(input.labels) : [];
+      const names = "labels" in input ? labelNames(input.labels, "labels") : [];
       return save(validated(start, end, crypto.randomUUID(), names));
     },
     "PATCH /api/entries/:id": async (request, id = "") => {
@@ -764,7 +850,8 @@ function timerApi(user: User) {
         : input.end === null
           ? null
           : instant(input.end, "end");
-      const names = "labels" in input ? labelInput(input.labels) : toEntry(current).labels;
+      const names =
+        "labels" in input ? labelNames(input.labels, "labels") : toEntry(current).labels;
       return save(validated(start, end, id, names));
     },
     "DELETE /api/entries/:id": (_, id = "") => {
@@ -796,8 +883,8 @@ function timerApi(user: User) {
   return routes;
 }
 
-async function handleApi(request: Request, pathname: string): Promise<unknown> {
-  if (request.method === "POST" && pathname === "/api/login") return login(request);
+async function handleApi(request: Request, pathname: string, ip: string): Promise<unknown> {
+  if (request.method === "POST" && pathname === "/api/login") return login(request, ip);
   const user = authenticate(request);
   if (!user) throw new HttpError(401, "Unauthorized");
   const match = pathname.match(/^\/api\/(entries|import)\/([^/]+)$/);
@@ -809,40 +896,85 @@ async function handleApi(request: Request, pathname: string): Promise<unknown> {
 
 // ─── HTTP ────────────────────────────────────────────────────────────────────
 
-async function serveStatic(pathname: string): Promise<Response> {
-  const relative = pathname === "/" ? "index.html" : decodeURIComponent(pathname.slice(1));
-  const file = Bun.file(`${publicDir}/${relative}`);
-  if (relative.split("/").includes("..") || !(await file.exists())) {
-    return new Response("Not found", { status: 404 });
+function decodedPath(pathname: string): string | null {
+  try {
+    return decodeURIComponent(pathname.slice(1));
+  } catch {
+    return null;
   }
+}
+
+async function serveStatic(pathname: string): Promise<Response> {
+  const relative = pathname === "/" ? "index.html" : decodedPath(pathname);
+  const notFound = new Response("Not found", { status: 404 });
+  if (!relative || relative.includes("\0") || relative.split("/").includes("..")) return notFound;
+  const file = Bun.file(`${publicDir}/${relative}`);
+  if (!(await file.exists())) return notFound;
   return new Response(file, { headers: { "cache-control": "no-cache" } });
 }
 
-function json(data: unknown, status = 200): Response {
+function json(data: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(data === null ? null : JSON.stringify(data), {
     status: data === null ? 204 : status,
-    headers: data === null ? {} : { "content-type": "application/json" },
+    headers: data === null ? headers : { "content-type": "application/json", ...headers },
   });
+}
+
+const securityHeaders: Record<string, string> = {
+  "content-security-policy":
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+  "x-content-type-options": "nosniff",
+  "x-frame-options": "DENY",
+  "referrer-policy": "no-referrer",
+};
+
+function clientIp(request: Request, server: Bun.Server<undefined>): string {
+  const forwarded = trustProxy ? request.headers.get("x-forwarded-for") : null;
+  return forwarded?.split(",").at(-1)?.trim() || server.requestIP(request)?.address || "unknown";
+}
+
+async function respond(request: Request, ip: string): Promise<Response> {
+  const { pathname } = new URL(request.url);
+  if (pathname === "/health") return json({ ok: true });
+  if (!pathname.startsWith("/api/")) {
+    return request.method === "GET" ? serveStatic(pathname) : json({ error: "Not found" }, 404);
+  }
+  try {
+    const result = await handleApi(request, pathname, ip);
+    return result instanceof Response ? result : json(result);
+  } catch (error) {
+    if (error instanceof HttpError) {
+      return json({ error: error.message }, error.status, error.headers);
+    }
+    console.error(error);
+    return json({ error: "Internal server error" }, 500);
+  }
 }
 
 Bun.serve({
   port,
-  async fetch(request) {
-    const { pathname } = new URL(request.url);
-    if (pathname === "/health") return json({ ok: true });
-    if (!pathname.startsWith("/api/")) {
-      return request.method === "GET" ? serveStatic(pathname) : json({ error: "Not found" }, 404);
+  development: false,
+  maxRequestBodySize: MAX_REQUEST_BYTES,
+  async fetch(request, server) {
+    const response = await respond(request, clientIp(request, server));
+    for (const [name, value] of Object.entries(securityHeaders)) {
+      response.headers.set(name, value);
     }
-    try {
-      const result = await handleApi(request, pathname);
-      return result instanceof Response ? result : json(result);
-    } catch (error) {
-      if (error instanceof HttpError) return json({ error: error.message }, error.status);
-      console.error(error);
-      return json({ error: "Internal server error" }, 500);
-    }
+    return response;
+  },
+  error(error) {
+    console.error(error);
+    return json({ error: "Internal server error" }, 500);
   },
 });
+
+// Removes sessions that have expired and failed sign-ins that no longer count.
+function cleanUp() {
+  sessions.removeIdle.run({ cutoff: sessionCutoff() });
+  for (const key of loginFailures.keys()) recentFailures(key);
+}
+cleanUp();
+setInterval(cleanUp, 60 * 60 * 1000);
 
 if (users.all.all().length === 0) {
   console.log(
