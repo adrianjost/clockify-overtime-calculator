@@ -433,6 +433,11 @@ function pad(n: number) {
 const localDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const localTime = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 
+// Spreadsheets run a cell starting with one of these as a formula, so names get a leading '.
+function asText(value: string) {
+  return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+}
+
 function csvValue(value: string) {
   return /[",\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
 }
@@ -459,8 +464,8 @@ function toCsv(entries: TrackedEntry[]) {
     const seconds = to ? Math.round((to.getTime() - from.getTime()) / 1000) : null;
     const project = labels.find((label) => label.startsWith(PROJECT_PREFIX));
     return [
-      project?.slice(PROJECT_PREFIX.length) ?? "",
-      labels.join("; "),
+      asText(project?.slice(PROJECT_PREFIX.length) ?? ""),
+      asText(labels.join("; ")),
       localDate(from),
       localTime(from),
       to ? localDate(to) : "",
