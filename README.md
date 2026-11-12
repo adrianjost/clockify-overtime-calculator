@@ -136,6 +136,12 @@ The other commands work the same way:
 
 Everyone can also change their own username and password on the web page, under Settings.
 
+A device stays signed in until it signs out, its password changes, or it isn't used for 60 days.
+After 10 wrong passwords for one username within 15 minutes, that username can't sign in for the
+rest of those 15 minutes (30 per IP address). Behind a reverse proxy, every request seems to come
+from the proxy, so set `TRUST_PROXY=true` to count by the address in `X-Forwarded-For` instead.
+Only set it when the proxy sets that header, as clients could otherwise pick any address.
+
 Without Docker Compose, use `docker exec -it <container> bun server.ts user add <name>`. On a NAS
 without SSH, open a terminal for the container in its container manager and run
 `bun server.ts user add <name>` there.
