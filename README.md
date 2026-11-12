@@ -152,6 +152,12 @@ Entries whose time you already tracked on the server (overlapping by more than a
 too, so nothing is counted twice. A running Clockify timer is not imported. The key is only used for
 the import and not stored. The server needs internet access to reach Clockify.
 
+### Export your entries
+
+At the bottom of the web page, "Export all entries as CSV · JSON" downloads all your time entries. The
+CSV has start and end date and time in your browser's time zone, the duration, and the exact times in
+ISO 8601, which most time tracking tools can import. The JSON lists the same entries with their IDs.
+
 ### Connect the app
 
 In Settings → Self-hosted time tracking, enter the server address (e.g. `http://192.168.1.10:8787`),
