@@ -77,6 +77,14 @@ body.web {
   height: 16px;
 }
 
+.web .timer-discard {
+  justify-content: center;
+  height: 40px;
+  margin-top: -8px;
+  border-radius: 12px;
+  font-size: 15px;
+}
+
 .web-entries-header {
   display: flex;
   align-items: center;

@@ -1251,11 +1251,17 @@ input[type="checkbox"] {
 }
 
 .timer-button[hidden],
+.timer-discard[hidden],
 .icon-button[hidden] {
   display: none;
 }
 
 .timer-button.is-running {
+  border-color: color-mix(in srgb, var(--negative) 45%, transparent);
+  color: var(--negative);
+}
+
+.timer-discard.is-confirming {
   border-color: color-mix(in srgb, var(--negative) 45%, transparent);
   color: var(--negative);
 }
