@@ -8,6 +8,8 @@ final class AppController {
   private var currentApiKey: String?
   private var server: TrackingServer?
   private var runningEntry: TrackedEntry?
+  /// Why the server session ended, shown in the settings until you sign in again.
+  private var signedOutNotice: String?
   private var overtimeTitle = "--"
   private var trayTitle = "--"
   private var statusItem: StatusItemController?
@@ -75,6 +77,15 @@ final class AppController {
   // MARK: - Bridge
 
   private func handle(method: String, params: [String: Any]) async throws -> String? {
+    do {
+      return try await dispatch(method: method, params: params)
+    } catch let error as SessionExpiredError {
+      sessionExpired()
+      throw error
+    }
+  }
+
+  private func dispatch(method: String, params: [String: Any]) async throws -> String? {
     switch method {
     case "analyzeOvertime":
       let data = try await analyzeFromDashboard(
@@ -97,7 +108,7 @@ final class AppController {
       return try json(
         ServerSettings(
           url: preferences.serverURL, username: preferences.serverUsername,
-          signedIn: server != nil))
+          signedIn: server != nil, notice: signedOutNotice))
     case "signInToServer":
       try await signInToServer(
         url: params["url"] as? String ?? "", username: params["username"] as? String ?? "",
@@ -249,6 +260,8 @@ final class AppController {
       } else if let apiKey = activeApiKey {
         _ = try await analyze(apiKey: apiKey, startDate: startDate, endDate: PlainDates.todayUTC())
       }
+    } catch is SessionExpiredError {
+      sessionExpired()
     } catch {
       print("Tray refresh failed:", error.localizedDescription)
     }
@@ -298,6 +311,20 @@ final class AppController {
     let url: String?
     let username: String?
     let signedIn: Bool
+    let notice: String?
+  }
+
+  /// Forgets a session the server rejected, so the app asks to sign in again instead of failing.
+  private func sessionExpired() {
+    guard server != nil else { return }
+    Keychain.clearServerToken()
+    server = nil
+    runningEntry = nil
+    stopTrayRefresh()
+    setOvertimeTitle("--")
+    signedOutNotice =
+      "You were signed out, for example because your password or username changed. Sign in again."
+    mainWindow?.notifyTrackingChanged()
   }
 
   private func signInToServer(url: String, username: String, password: String) async throws {
@@ -317,6 +344,7 @@ final class AppController {
     preferences.serverUsername = username
     preferences.save()
     server = TrackingServer(baseURL: baseURL, token: token)
+    signedOutNotice = nil
     runningEntry = try? await server?.runningTimer()
     await refreshTray()
     startTrayRefresh()
@@ -324,6 +352,7 @@ final class AppController {
 
   /// Keeps the address and username to make signing in again easy.
   private func signOutOfServer() async {
+    signedOutNotice = nil
     try? await server?.signOut()
     Keychain.clearServerToken()
     server = nil
@@ -356,6 +385,9 @@ final class AppController {
     Task {
       do {
         try await timerAction(action)
+      } catch is SessionExpiredError {
+        sessionExpired()
+        openSettings()
       } catch {
         let alert = NSAlert()
         alert.messageText = "Time tracking failed"
