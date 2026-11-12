@@ -13,6 +13,7 @@ final class AppController {
   private var statusItem: StatusItemController?
   private var mainWindow: MainWindowController?
   private var trayRefreshTask: Task<Void, Never>?
+  private var elapsedTitleTask: Task<Void, Never>?
 
   private enum DataSource: String {
     case clockify, server
@@ -428,9 +429,24 @@ final class AppController {
     updateTrayTitle()
   }
 
-  /// A dot in front of the overtime shows a running timer.
+  /// A running timer shows as a dot and its length in front of the overtime.
   private func updateTrayTitle() {
-    trayTitle = runningEntry == nil ? overtimeTitle : "● \(overtimeTitle)"
+    if let running = runningEntry {
+      trayTitle = "● \(Self.formatElapsed(running.seconds)) · \(overtimeTitle)"
+      if elapsedTitleTask == nil {
+        elapsedTitleTask = Task { [weak self] in
+          while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(10))
+            guard !Task.isCancelled else { return }
+            self?.updateTrayTitle()
+          }
+        }
+      }
+    } else {
+      trayTitle = overtimeTitle
+      elapsedTitleTask?.cancel()
+      elapsedTitleTask = nil
+    }
     statusItem?.setTitle(trayTitle)
   }
 

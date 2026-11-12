@@ -171,8 +171,8 @@ the requests.
 
 Once connected:
 
-- Start and stop the timer from the toolbar or by right-clicking the menu bar item. A dot in the menu
-  bar shows that the timer is running.
+- Start and stop the timer from the toolbar or by right-clicking the menu bar item. While the timer runs,
+  the menu bar shows a dot and its length in front of your overtime, e.g. `● 1:25 · +12h 30m`.
 - The list button in the toolbar opens your time entries. Click an entry to change or delete it, or
   use "Add entry" for time you forgot to track. An end time earlier than the start time counts as the
   next day.
