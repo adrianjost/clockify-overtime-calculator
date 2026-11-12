@@ -209,40 +209,93 @@ async function login(request: Request) {
 
 type ClockifyEntry = { timeInterval: { start: string; end: string | null } };
 
-async function clockify<T>(path: string, apiKey: string): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(`${clockifyUrl}${path}`, {
-      headers: { "X-Api-Key": apiKey },
-      signal: AbortSignal.timeout(30_000),
-    });
-  } catch (error) {
-    throw new HttpError(502, `Clockify is unreachable: ${(error as Error).message}`);
+/** Reports what the import is doing; `retryAt` adds a countdown. */
+type Progress = (message: string, retryAt?: number) => void;
+
+const CLOCKIFY_PAGE_SIZE = 1000;
+const CLOCKIFY_ATTEMPTS = 10;
+const MAX_RETRY_WAIT_SECONDS = 5 * 60;
+
+function retryAfterSeconds(response: Response): number | null {
+  const header = response.headers.get("retry-after");
+  if (!header) return null;
+  const seconds = Number(header);
+  if (!Number.isNaN(seconds)) return seconds;
+  const date = Date.parse(header);
+  return Number.isNaN(date) ? null : (date - Date.now()) / 1000;
+}
+
+async function clockify<T>(
+  path: string,
+  apiKey: string,
+  progress: Progress,
+  signal: AbortSignal,
+): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    let response: Response | null = null;
+    let problem: string;
+    try {
+      response = await fetch(`${clockifyUrl}${path}`, {
+        headers: { "X-Api-Key": apiKey },
+        signal: AbortSignal.any([signal, AbortSignal.timeout(60_000)]),
+      });
+      if (response.status === 401 || response.status === 403) {
+        throw new HttpError(400, "Clockify did not accept the API key");
+      }
+      if (response.ok) return (await response.json()) as T;
+      problem =
+        response.status === 429
+          ? "Clockify's rate limit is reached"
+          : `Clockify answered with HTTP ${response.status}`;
+      if (response.status < 500 && response.status !== 429) throw new HttpError(502, problem);
+    } catch (error) {
+      if (error instanceof HttpError || signal.aborted) throw error;
+      problem = `Clockify is unreachable (${(error as Error).message})`;
+    }
+    if (attempt === CLOCKIFY_ATTEMPTS) throw new HttpError(502, `${problem}. Try again later.`);
+    const seconds = Math.min(
+      Math.max((response && retryAfterSeconds(response)) ?? 0, 5 * 2 ** (attempt - 1)),
+      MAX_RETRY_WAIT_SECONDS,
+    );
+    const retryAt = Date.now() + seconds * 1000;
+    progress(problem, retryAt);
+    await Bun.sleep(seconds * 1000);
+    signal.throwIfAborted();
   }
-  if (response.status === 401 || response.status === 403) {
-    throw new HttpError(400, "Clockify did not accept the API key");
-  }
-  if (response.status === 429) {
-    throw new HttpError(429, "Clockify's rate limit is reached. Try again in an hour.");
-  }
-  if (!response.ok) throw new HttpError(502, `Clockify error (HTTP ${response.status})`);
-  return (await response.json()) as T;
 }
 
 /** Copies all finished Clockify entries that don't overlap an existing entry. */
-async function importFromClockify(user_id: string, apiKey: string) {
-  const pageSize = 5000;
-  const clockifyUser = await clockify<{ id: string; defaultWorkspace: string }>("/user", apiKey);
+async function importFromClockify(
+  user_id: string,
+  apiKey: string,
+  progress: Progress,
+  signal: AbortSignal,
+) {
+  progress("Connecting to Clockify…");
+  const clockifyUser = await clockify<{ id: string; defaultWorkspace: string }>(
+    "/user",
+    apiKey,
+    progress,
+    signal,
+  );
   const found: ClockifyEntry[] = [];
   for (let page = 1; ; page++) {
+    progress(
+      found.length
+        ? `Loaded ${found.length} entries from Clockify…`
+        : "Loading entries from Clockify…",
+    );
     const batch = await clockify<ClockifyEntry[]>(
-      `/workspaces/${clockifyUser.defaultWorkspace}/user/${clockifyUser.id}/time-entries?page-size=${pageSize}&page=${page}`,
+      `/workspaces/${clockifyUser.defaultWorkspace}/user/${clockifyUser.id}/time-entries?page-size=${CLOCKIFY_PAGE_SIZE}&page=${page}`,
       apiKey,
+      progress,
+      signal,
     );
     found.push(...batch);
-    if (batch.length < pageSize) break;
+    if (batch.length < CLOCKIFY_PAGE_SIZE) break;
   }
 
+  progress(`Saving ${found.length} entries…`);
   const result = { imported: 0, skipped: 0, running: 0 };
   db.transaction(() => {
     for (const { timeInterval } of found) {
@@ -261,6 +314,60 @@ async function importFromClockify(user_id: string, apiKey: string) {
     }
   })();
   return result;
+}
+
+/**
+ * Runs the import while streaming one JSON object per line: `{progress}` every two seconds
+ * (which also keeps the connection open), then `{result}` or `{error}`.
+ */
+function streamImport(user_id: string, apiKey: string, requestSignal: AbortSignal): Response {
+  const abort = new AbortController();
+  requestSignal.addEventListener("abort", () => abort.abort());
+  const encoder = new TextEncoder();
+  let message = "";
+  let retryAt = 0;
+  let ticker: ReturnType<typeof setInterval>;
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      const send = (data: unknown) => {
+        if (!abort.signal.aborted) controller.enqueue(encoder.encode(`${JSON.stringify(data)}\n`));
+      };
+      const sendProgress = () => {
+        const seconds = Math.ceil((retryAt - Date.now()) / 1000);
+        const retry = seconds > 0 ? ` Trying again in ${seconds}s…` : " Trying again…";
+        send({ progress: retryAt ? `${message}.${retry}` : message });
+      };
+      const progress: Progress = (text, until = 0) => {
+        message = text;
+        retryAt = until;
+        sendProgress();
+      };
+      ticker = setInterval(sendProgress, 2000);
+      importFromClockify(user_id, apiKey, progress, abort.signal)
+        .then((result) => send({ result }))
+        .catch((error) => {
+          if (abort.signal.aborted) return;
+          if (!(error instanceof HttpError)) console.error(error);
+          send({ error: error instanceof HttpError ? error.message : "Internal server error" });
+        })
+        .finally(() => {
+          clearInterval(ticker);
+          if (!abort.signal.aborted) controller.close();
+        });
+    },
+    cancel() {
+      clearInterval(ticker);
+      abort.abort();
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      "content-type": "application/x-ndjson",
+      "cache-control": "no-cache",
+      "x-accel-buffering": "no",
+    },
+  });
 }
 
 function timerApi(user: User) {
@@ -341,7 +448,7 @@ function timerApi(user: User) {
       if (typeof apiKey !== "string" || !apiKey.trim()) {
         throw new HttpError(400, "apiKey is required");
       }
-      return importFromClockify(user_id, apiKey.trim());
+      return streamImport(user_id, apiKey.trim(), request.signal);
     },
   };
   return routes;
@@ -384,7 +491,8 @@ Bun.serve({
       return request.method === "GET" ? serveStatic(pathname) : json({ error: "Not found" }, 404);
     }
     try {
-      return json(await handleApi(request, pathname));
+      const result = await handleApi(request, pathname);
+      return result instanceof Response ? result : json(result);
     } catch (error) {
       if (error instanceof HttpError) return json({ error: error.message }, error.status);
       console.error(error);
