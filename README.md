@@ -100,7 +100,14 @@ ARM). It is rebuilt on every change to `main`. On a NAS you can also paste the C
 container manager.
 
 The server listens on port 8787 and stores everything in one SQLite file, `data/time-tracking.db`
-next to the Compose file. Back up that folder to back up your entries. To update:
+next to the Compose file. Back up that folder to back up your entries.
+
+The server runs as the unprivileged user `bun` (uid 1000) and takes over the `data` folder when it
+starts. The Compose file also makes the container's file system read-only, removes all permissions
+except the ones needed for that handover and limits it to 512 MB of memory. If you use your own
+Compose file or container manager, copy those settings.
+
+To update:
 
 ```sh
 docker compose pull && docker compose up -d
