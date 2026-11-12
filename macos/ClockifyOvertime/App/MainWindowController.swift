@@ -39,7 +39,7 @@ final class MainWindowController: NSObject, NSWindowDelegate, WKScriptMessageHan
       backing: .buffered,
       defer: false
     )
-    window.title = "Clockify Overtime"
+    window.title = "Surplus"
     window.titleVisibility = .hidden
     window.titlebarAppearsTransparent = true
     window.minSize = Self.minSize

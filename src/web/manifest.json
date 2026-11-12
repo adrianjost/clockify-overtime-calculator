@@ -1,15 +1,23 @@
 {
   "id": "/",
-  "name": "Overtime",
-  "short_name": "Overtime",
-  "description": "Track your working time and see your overtime balance.",
+  "name": "Surplus",
+  "short_name": "Surplus",
+  "description": "Track your working time and see how much overtime you have banked.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#1e1e1e",
-  "theme_color": "#1e1e1e",
+  "background_color": "#121317",
+  "theme_color": "#121317",
   "icons": [
-    { "src": "icon-256.png", "sizes": "256x256", "type": "image/png" },
-    { "src": "icon.png", "sizes": "512x512", "type": "image/png" }
+    {
+      "src": "icon-256.png",
+      "sizes": "256x256",
+      "type": "image/png"
+    },
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
   ]
 }

@@ -45,7 +45,7 @@ final class StatusItemController: NSObject {
 
   private func rebuildMenu() {
     menu.removeAllItems()
-    menu.addItem(MenuAction.item("Open Clockify Overtime", key: "", onOpen))
+    menu.addItem(MenuAction.item("Open Surplus", key: "", onOpen))
     let extra = extraMenuItems()
     if !extra.isEmpty {
       menu.addItem(.separator())
