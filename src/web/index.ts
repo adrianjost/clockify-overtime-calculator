@@ -328,6 +328,97 @@ async function updateWelcome() {
   } catch {}
 }
 
+// ─── Export ──────────────────────────────────────────────────────────────
+
+function pad(n: number) {
+  return String(n).padStart(2, "0");
+}
+const localDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const localTime = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+
+function csvValue(value: string) {
+  return /[",\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
+}
+
+/** One row per entry in the browser's time zone, plus ISO times; a running entry has no end. */
+function toCsv(entries: TrackedEntry[]) {
+  const header = [
+    "Start Date",
+    "Start Time",
+    "End Date",
+    "End Time",
+    "Duration",
+    "Duration (hours)",
+    "Start (ISO 8601)",
+    "End (ISO 8601)",
+  ];
+  const rows = entries.map(({ start, end }) => {
+    const from = new Date(start);
+    const to = end ? new Date(end) : null;
+    const seconds = to ? Math.round((to.getTime() - from.getTime()) / 1000) : null;
+    return [
+      localDate(from),
+      localTime(from),
+      to ? localDate(to) : "",
+      to ? localTime(to) : "",
+      seconds === null
+        ? ""
+        : `${Math.floor(seconds / 3600)}:${pad(Math.floor((seconds % 3600) / 60))}:${pad(seconds % 60)}`,
+      seconds === null ? "" : (seconds / 3600).toFixed(2),
+      start,
+      end ?? "",
+    ];
+  });
+  return [header, ...rows].map((row) => row.map(csvValue).join(",")).join("\r\n") + "\r\n";
+}
+
+async function exportEntries(format: "csv" | "json") {
+  const to = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const entries = await api<TrackedEntry[]>(
+    "GET",
+    `/api/entries?from=1970-01-01T00:00:00.000Z&to=${encodeURIComponent(to)}`,
+  );
+  const body =
+    format === "csv"
+      ? toCsv(entries)
+      : JSON.stringify(
+          {
+            exportedAt: new Date().toISOString(),
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            entries: entries.map(({ id, start, end }) => ({
+              id,
+              start,
+              end,
+              durationSeconds: end
+                ? Math.round((Date.parse(end) - Date.parse(start)) / 1000)
+                : null,
+            })),
+          },
+          null,
+          2,
+        );
+  const blob = new Blob([body], { type: format === "csv" ? "text/csv" : "application/json" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `time-entries-${localDate(new Date())}.${format}`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+}
+
+for (const button of Array.from(document.querySelectorAll<HTMLButtonElement>("[data-export]"))) {
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    try {
+      await exportEntries(button.dataset["export"] as "csv" | "json");
+    } catch (error) {
+      if (error instanceof Unauthorized) signOut(error.message);
+      else alert(error instanceof Error ? error.message : String(error));
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
 let started = false;
 
 function showMain() {

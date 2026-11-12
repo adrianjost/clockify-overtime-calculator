@@ -180,6 +180,15 @@ body.web {
   color: var(--text-secondary);
 }
 
+.web-footer-export {
+  flex-basis: 100%;
+  text-align: center;
+}
+
+.web-footer-export .link-button {
+  padding: 0;
+}
+
 .web-footer-import {
   flex-basis: 100%;
 }
