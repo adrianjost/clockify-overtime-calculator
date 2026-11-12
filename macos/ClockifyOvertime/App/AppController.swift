@@ -160,6 +160,15 @@ final class AppController {
       return nil
     case "getTrayEnabled":
       return try json(["enabled": preferences.trayEnabled])
+    case "getTraySeconds":
+      return try json(["enabled": preferences.trayShowsSeconds])
+    case "setTraySeconds":
+      preferences.trayShowsSeconds = params["enabled"] as? Bool ?? false
+      preferences.save()
+      elapsedTitleTask?.cancel()
+      elapsedTitleTask = nil
+      updateTrayTitle()
+      return nil
     case "setTrayEnabled":
       setTrayEnabled(params["enabled"] as? Bool ?? true)
       return nil
@@ -432,6 +441,15 @@ final class AppController {
     return String(format: "%d:%02d", minutes / 60, minutes % 60)
   }
 
+  /// "4:19" under an hour, "1:04:19" from one hour on, like the timer button.
+  private static func formatElapsedWithSeconds(_ seconds: Double) -> String {
+    let total = max(0, Int(seconds))
+    let hours = total / 3600
+    return hours > 0
+      ? String(format: "%d:%02d:%02d", hours, total / 60 % 60, total % 60)
+      : String(format: "%d:%02d", total / 60, total % 60)
+  }
+
   // MARK: - Tray
 
   private func createStatusItem() {
@@ -464,11 +482,14 @@ final class AppController {
   /// A running timer shows as a dot and its length in front of the overtime.
   private func updateTrayTitle() {
     if let running = runningEntry {
-      trayTitle = "● \(Self.formatElapsed(running.seconds)) · \(overtimeTitle)"
+      let seconds = preferences.trayShowsSeconds
+      let elapsed =
+        seconds ? Self.formatElapsedWithSeconds(running.seconds) : Self.formatElapsed(running.seconds)
+      trayTitle = "● \(elapsed) · \(overtimeTitle)"
       if elapsedTitleTask == nil {
         elapsedTitleTask = Task { [weak self] in
           while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(10))
+            try? await Task.sleep(for: .seconds(seconds ? 1 : 10))
             guard !Task.isCancelled else { return }
             self?.updateTrayTitle()
           }
