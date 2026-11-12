@@ -148,7 +148,7 @@ document.querySelector("#import-cancel")!.addEventListener("click", () => import
 document.querySelector("#import-form")!.addEventListener("submit", async (event) => {
   event.preventDefault();
   importSubmit.disabled = true;
-  importResult.classList.remove("is-success");
+  importResult.classList.add("is-success");
   importResult.textContent = "Importing…";
   try {
     const { imported, skipped, running } = await api<{
@@ -157,7 +157,6 @@ document.querySelector("#import-form")!.addEventListener("submit", async (event)
       running: number;
     }>("POST", "/api/import/clockify", { apiKey: importKey.value });
     importKey.value = "";
-    importResult.classList.add("is-success");
     importResult.textContent =
       `Imported ${imported} ${imported === 1 ? "entry" : "entries"}` +
       (skipped ? `, skipped ${skipped} that overlap existing ones` : "") +
@@ -169,6 +168,7 @@ document.querySelector("#import-form")!.addEventListener("submit", async (event)
       signOut(error.message);
       return;
     }
+    importResult.classList.remove("is-success");
     importResult.textContent = error instanceof Error ? error.message : String(error);
   } finally {
     importSubmit.disabled = false;
