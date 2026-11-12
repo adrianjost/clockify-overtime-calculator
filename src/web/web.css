@@ -82,8 +82,21 @@ body.web {
 .web-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
+}
+
+.web-header .last-fetched {
+  margin-left: auto;
+}
+
+.web-header .icon-button {
+  width: 36px;
+  height: 36px;
+}
+
+.web-header .icon-button svg {
+  width: 22px;
+  height: 22px;
 }
 
 .web .hero {
@@ -172,14 +185,6 @@ body.web {
   min-width: 0;
 }
 
-.web-footer {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  color: var(--text-secondary);
-}
-
 .web-settings-header {
   display: flex;
   flex-direction: column;
@@ -191,9 +196,7 @@ body.web {
   margin: 0;
 }
 
-.web-settings-header .link-button,
-.web-footer .link-button {
-  padding: 0;
+.web-settings-header .back-button {
   text-decoration: none;
 }
 
