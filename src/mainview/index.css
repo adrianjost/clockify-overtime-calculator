@@ -641,9 +641,8 @@ button {
 
 .chart-header {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
+  align-items: center;
+  gap: 4px 12px;
   flex-wrap: wrap;
   margin-bottom: 6px;
 }
@@ -652,18 +651,34 @@ button {
   margin: 0;
   font-size: 13px;
   font-weight: 600;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.chart-zoom {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  gap: 8px;
+  /* Reads as part of the title: "Weekly Working Hours · Sep 7 – Nov 15". */
+  margin-left: -8px;
+  font-size: 13px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.chart-zoom[hidden] {
+  display: none;
 }
 
 .chart-range-label {
-  margin-left: 0.3em;
-  font-weight: 400;
   color: var(--text-secondary);
 }
 
+.chart-range-label::before {
+  content: "· ";
+}
+
 .zoom-reset-btn {
-  margin-left: 8px;
   padding: 0 8px;
   border: none;
   border-radius: 999px;
@@ -681,10 +696,12 @@ button {
 .chart-legend {
   display: flex;
   gap: 12px;
-  margin: 0;
+  margin: 0 0 0 auto;
   padding: 0;
   list-style: none;
   font-size: 11px;
+  line-height: 14px;
+  white-space: nowrap;
   color: var(--text-secondary);
 }
 
@@ -1304,7 +1321,21 @@ input[type="checkbox"] {
     display: none;
   }
 
+  /* Two fixed rows: title with the zoomed dates on the right, then the legend. */
   .chart-legend {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+
+  .chart-zoom {
+    margin-left: auto;
+  }
+
+  .chart-range-label::before {
+    content: none;
+  }
+
+  .zoom-reset-word {
     display: none;
   }
 }
