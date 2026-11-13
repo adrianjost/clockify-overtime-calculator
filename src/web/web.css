@@ -48,10 +48,15 @@ body.web {
   gap: 18px;
 }
 
-/* Fits the two header rows and the chart at its minimum height of 200px. */
+/* The card grows with its header, however many lines that takes, so the chart with its
+   date labels always stays inside. */
 .web .charts-container {
   flex: none;
-  height: 272px;
+}
+
+.web #daily-chart {
+  flex: none;
+  height: 200px;
 }
 
 /* Side by side on wide screens, filling the window: only the entry list scrolls, like in the app. */
@@ -97,6 +102,11 @@ body.web {
     height: auto;
     min-height: 300px;
     align-items: flex-start;
+  }
+
+  .web #daily-chart {
+    flex: 1;
+    height: auto;
   }
 }
 

@@ -278,14 +278,14 @@ function renderCharts(data: OvertimeData) {
     const visibleCount = effective.end - effective.start + 1;
 
     const pixelsPerDay =
-      Math.max(280, Math.floor(dailyContainer.clientWidth || 800)) / visibleCount;
+      Math.max(240, Math.floor(dailyContainer.clientWidth || 800)) / visibleCount;
     useWeeklyBars = useWeeklyBars ? pixelsPerDay < 11 : pixelsPerDay < 8;
     const shouldUseWeekly = useWeeklyBars;
     // Before measuring: the header's height decides how much room the chart gets.
     updateChartHeader(dailyContainer, shouldUseWeekly, visibleData);
 
     // Render bar chart
-    const chartWidth = Math.max(280, Math.floor(dailyContainer.clientWidth || 800));
+    const chartWidth = Math.max(240, Math.floor(dailyContainer.clientWidth || 800));
 
     // Get available height from the charts-container flex space
     const chartsContainer = document.querySelector<HTMLDivElement>(".charts-container");
