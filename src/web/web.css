@@ -53,27 +53,49 @@ body.web {
   height: 240px;
 }
 
-/* Side by side on wide screens: the overview stays in view while the entries scroll. */
+/* Side by side on wide screens, filling the window: only the entry list scrolls, like in the app. */
 @media (min-width: 900px) {
   .web-main {
     max-width: 1180px;
+    height: 100dvh;
     padding-inline: 32px;
   }
 
   .web-columns {
+    flex: 1;
+    min-height: 0;
     display: grid;
     grid-template-columns: minmax(0, 3fr) minmax(340px, 2fr);
+    grid-template-rows: minmax(0, 1fr);
     gap: 32px;
-    align-items: start;
   }
 
   .web-overview {
-    position: sticky;
-    top: 16px;
+    min-height: 0;
+    overflow-y: auto;
   }
 
+  .web-entries {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  /* Room on the sides so the cards' shadows and the stacks aren't cut off. */
+  .web-entries-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    margin: 0 -6px;
+    padding: 2px 6px 16px;
+  }
+
+  /* The chart grows into the free height up to its maximum; the card ends with it. */
   .web .charts-container {
-    height: 340px;
+    flex: 1;
+    height: auto;
+    min-height: 300px;
+    align-items: flex-start;
   }
 }
 
