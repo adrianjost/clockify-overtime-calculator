@@ -1457,6 +1457,12 @@ input[type="checkbox"] {
   border-radius: 2px;
 }
 
+button.icon-button {
+  padding: 0;
+  border: none;
+  background: none;
+}
+
 #entries-toggle:hover svg {
   animation: none;
 }
