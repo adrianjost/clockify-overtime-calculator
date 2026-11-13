@@ -1559,10 +1559,6 @@ button.icon-button {
   background: var(--hover);
 }
 
-.entry-row.is-running .entry-total {
-  color: var(--negative);
-}
-
 /* Two narrower cards peek out below a collapsed day. */
 .entry-stack {
   position: relative;
