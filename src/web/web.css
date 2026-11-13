@@ -48,9 +48,10 @@ body.web {
   gap: 18px;
 }
 
+/* Fits the two header rows and the chart at its minimum height of 200px. */
 .web .charts-container {
   flex: none;
-  height: 240px;
+  height: 272px;
 }
 
 /* Side by side on wide screens, filling the window: only the entry list scrolls, like in the app. */

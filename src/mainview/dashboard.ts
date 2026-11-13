@@ -277,6 +277,13 @@ function renderCharts(data: OvertimeData) {
     );
     const visibleCount = effective.end - effective.start + 1;
 
+    const pixelsPerDay =
+      Math.max(280, Math.floor(dailyContainer.clientWidth || 800)) / visibleCount;
+    useWeeklyBars = useWeeklyBars ? pixelsPerDay < 11 : pixelsPerDay < 8;
+    const shouldUseWeekly = useWeeklyBars;
+    // Before measuring: the header's height decides how much room the chart gets.
+    updateChartHeader(dailyContainer, shouldUseWeekly, visibleData);
+
     // Render bar chart
     const chartWidth = Math.max(280, Math.floor(dailyContainer.clientWidth || 800));
 
@@ -297,10 +304,6 @@ function renderCharts(data: OvertimeData) {
       }
     }
 
-    const pixelsPerDay = chartWidth / visibleCount;
-    useWeeklyBars = useWeeklyBars ? pixelsPerDay < 11 : pixelsPerDay < 8;
-    const shouldUseWeekly = useWeeklyBars;
-
     // Bars for the whole range, positioned by date. The chart is a window onto them,
     // like a large image, so nothing changes shape while zooming or panning.
     const cumulativeMode: CumulativeMode = shouldUseWeekly ? "weekly" : "daily";
@@ -319,35 +322,6 @@ function renderCharts(data: OvertimeData) {
       cumulativeMin: Math.min(...allBars.map((bar) => bar.cumulative), 0),
       cumulativeMax: Math.max(...allBars.map((bar) => bar.cumulative), 0),
     };
-
-    // Update chart title; show date range + reset button when zoomed
-    const h2Title = dailyContainer.parentElement?.querySelector("h2");
-    if (h2Title) {
-      const titleText = shouldUseWeekly ? "Weekly Working Hours" : "Daily Working Hours";
-      h2Title.innerHTML = "";
-      const textSpan = document.createElement("span");
-      textSpan.textContent = titleText;
-      h2Title.appendChild(textSpan);
-
-      if (focusRange !== null) {
-        const startDate = new Date(visibleData[0].date);
-        const endDate = new Date(visibleData[visibleData.length - 1].date);
-        const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-        const rangeSpan = document.createElement("span");
-        rangeSpan.className = "chart-range-label";
-        rangeSpan.textContent = `· ${fmt(startDate)} – ${fmt(endDate)}`;
-        h2Title.appendChild(rangeSpan);
-
-        const resetBtn = document.createElement("button");
-        resetBtn.className = "zoom-reset-btn";
-        resetBtn.textContent = "Reset zoom";
-        resetBtn.title = "Reset zoom";
-        resetBtn.addEventListener("click", () => {
-          dailyContainer!.dispatchEvent(new CustomEvent("zoom-reset", { bubbles: true }));
-        });
-        h2Title.appendChild(resetBtn);
-      }
-    }
 
     // Show grab cursor when zoomed (draggable)
     dailyContainer.style.cursor = focusRange !== null ? "grab" : "";
@@ -392,10 +366,42 @@ function renderCharts(data: OvertimeData) {
   }
 }
 
-/**
- * FLIP-style zoom: start the new plot with an x-transform that reproduces the previous
- * view, then transition to identity. Both views map calendar days linearly to x.
- */
+/** Title, plus the visible dates and a reset button while zoomed in. */
+function updateChartHeader(
+  container: HTMLElement,
+  weekly: boolean,
+  visibleData: OvertimeData["dailyData"],
+) {
+  const title = container.parentElement?.querySelector("h2");
+  if (!title) return;
+  title.textContent = weekly ? "Weekly Working Hours" : "Daily Working Hours";
+
+  // Created once and reused, so a tap on the button survives re-renders while panning.
+  let zoom = title.parentElement?.querySelector<HTMLElement>(".chart-zoom");
+  if (!zoom) {
+    zoom = document.createElement("span");
+    zoom.className = "chart-zoom";
+    const range = document.createElement("span");
+    range.className = "chart-range-label";
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.className = "zoom-reset-btn";
+    reset.setAttribute("aria-label", "Reset zoom");
+    reset.innerHTML = 'Reset<span class="zoom-reset-word"> zoom</span>';
+    reset.addEventListener("click", () => {
+      container.dispatchEvent(new CustomEvent("zoom-reset", { bubbles: true }));
+    });
+    zoom.append(range, reset);
+    title.after(zoom);
+  }
+  zoom.hidden = focusRange === null || visibleData.length === 0;
+  if (zoom.hidden) return;
+  const fmt = (iso: string) =>
+    new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  zoom.querySelector(".chart-range-label")!.textContent =
+    `${fmt(visibleData[0].date)} – ${fmt(visibleData[visibleData.length - 1].date)}`;
+}
+
 /**
  * SVG shapes can't be composited, so the bars grow in as HTML elements (scaleY on their own
  * layers) underneath the chart, which then switches back to its own SVG bars.
@@ -436,6 +442,10 @@ function buildBarIntro(svg: SVGSVGElement): HTMLElement {
   return intro;
 }
 
+/**
+ * FLIP-style zoom: start the new plot with an x-transform that reproduces the previous
+ * view, then transition to identity. Both views map calendar days linearly to x.
+ */
 function animateZoom(svg: SVGSVGElement, to: DayRange) {
   const from = animateZoomFrom;
   animateZoomFrom = null;
@@ -940,6 +950,20 @@ function setupChartInteraction(container: HTMLDivElement): void {
   // One finger or the mouse drags to pan when zoomed in; two fingers pinch to zoom and pan.
   let touchPinch: { base: DayRange; day: number; distance: number } | null = null;
 
+  // A touch that stays in place is a tap and shows that bar's details. At full range, where
+  // there is nothing to pan, a swipe across the bars does the same as it moves.
+  let tap: { x: number; y: number; moved: boolean } | null = null;
+  const TAP_SLOP = 8;
+
+  // The tooltip is fixed to the screen, so it goes away when the page scrolls or on a tap elsewhere.
+  const closeTouchTooltip = () => {
+    if (touchTooltipOpen) chartHover?.clear();
+  };
+  window.addEventListener("scroll", closeTouchTooltip, { capture: true, passive: true });
+  document.addEventListener("pointerdown", (e) => {
+    if (!container.contains(e.target as Node)) closeTouchTooltip();
+  });
+
   function startDrag(clientX: number) {
     if (!focusRange) return;
     isDragging = true;
@@ -959,7 +983,9 @@ function setupChartInteraction(container: HTMLDivElement): void {
     return { mid: (a.x + b.x) / 2, distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)) };
   }
 
+  let lastPointerType = "";
   container.addEventListener("pointerdown", (e) => {
+    lastPointerType = e.pointerType;
     if (e.button !== 0) return;
     if (e.pointerType === "touch") {
       touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -972,9 +998,12 @@ function setupChartInteraction(container: HTMLDivElement): void {
         const { mid, distance } = touchPair();
         const day = base.start + relXOf(mid) * (base.end - base.start + 1);
         touchPinch = { base, day, distance };
+        tap = null;
+        chartHover?.clear();
         return;
       }
       if (touches.size > 2) return;
+      tap = { x: e.clientX, y: e.clientY, moved: false };
     } else {
       container.setPointerCapture(e.pointerId);
     }
@@ -994,6 +1023,13 @@ function setupChartInteraction(container: HTMLDivElement): void {
       rerenderNextFrame();
       return;
     }
+    if (tap && e.pointerType === "touch") {
+      if (!tap.moved && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > TAP_SLOP) {
+        tap.moved = true;
+        if (focusRange) chartHover?.clear();
+      }
+      if (tap.moved && !focusRange) chartHover?.touch(e.clientX, e.clientY, false);
+    }
     if (!isDragging || !dragStartRange) return;
     const visibleCount = dragStartRange.end - dragStartRange.start + 1;
     const deltaDays = (-(e.clientX - dragStartX) * visibleCount) / plotBox().width;
@@ -1003,6 +1039,12 @@ function setupChartInteraction(container: HTMLDivElement): void {
   });
 
   const endDrag = (e: PointerEvent) => {
+    if (tap && e.pointerType === "touch") {
+      if (e.type === "pointerup" && !tap.moved) chartHover?.touch(e.clientX, e.clientY, true);
+      // The browser took over the gesture to scroll the page.
+      else if (e.type === "pointercancel") chartHover?.clear();
+      tap = null;
+    }
     if (touches.delete(e.pointerId) && touchPinch) {
       if (touches.size >= 2) return;
       touchPinch = null;
@@ -1021,8 +1063,9 @@ function setupChartInteraction(container: HTMLDivElement): void {
   container.addEventListener("pointerup", endDrag);
   container.addEventListener("pointercancel", endDrag);
 
-  // Double-click to reset to full range
+  // Double-click to reset to full range. Not for touch, where two quick taps look at two bars.
   container.addEventListener("dblclick", () => {
+    if (lastPointerType === "touch") return;
     requestAnimatedZoom();
     focusRange = null;
     container.dispatchEvent(new CustomEvent("zoom-reset", { bubbles: true }));
@@ -1036,6 +1079,15 @@ function getWeekKey(isoDate: string): string {
   date.setDate(date.getDate() + offsetToMonday);
   return formatIsoDate(date);
 }
+
+/** Tooltip of the chart currently on screen, for touch input (see setupChartInteraction). */
+let chartHover: {
+  /** Shows the bar under the point; with `toggle`, a second tap on the same bar hides it. */
+  touch(clientX: number, clientY: number, toggle: boolean): void;
+  clear(): void;
+} | null = null;
+// A tooltip opened by touch stays until the next tap or scroll, as there is no hover to end it.
+let touchTooltipOpen = false;
 
 type YDomain = { maxHours: number; cumulativeMin: number; cumulativeMax: number };
 
@@ -1314,37 +1366,69 @@ function createBarChart(
     hideChartTooltip();
   };
 
+  const barAt = (clientX: number): number => {
+    const box = svg.getBoundingClientRect();
+    const day = firstDay + (clientX - box.left - padding.left) / dayWidth;
+    if (day < firstDay || day >= firstDay + dayCount) return -1;
+    return chartBars.findIndex((bar) => day >= bar.start && day < bar.start + bar.span);
+  };
+  const hover = (index: number) => {
+    if (index === hoveredIndex) return;
+    if (hoveredIndex !== null) bars[hoveredIndex]?.classList.remove("is-hovered");
+    bars[index].classList.add("is-hovered");
+    hoveredIndex = index;
+    showChartTooltip({
+      date: chartBars[index].date,
+      endDate: chartBars[index].endDate,
+      hours: data[index],
+      balance: cumulativeData[index],
+      detail: chartBars[index].detail,
+    });
+  };
+
+  // Touch has no hover: a tap or a swipe across the bars shows the tooltip instead. The
+  // chart's container captures touches, so these arrive through setupChartInteraction.
+  const isTouch = (event: PointerEvent) => event.pointerType === "touch";
   svg.addEventListener("pointermove", (event) => {
+    if (isTouch(event)) return;
     if (event.buttons !== 0) {
       clearHover(); // dragging pans the chart
       return;
     }
-    const box = svg.getBoundingClientRect();
-    const day = firstDay + (event.clientX - box.left - padding.left) / dayWidth;
-    const inPlot = day >= firstDay && day < firstDay + dayCount;
-    const index = chartBars.findIndex((bar) => day >= bar.start && day < bar.start + bar.span);
-    if (!inPlot || index < 0) {
+    const index = barAt(event.clientX);
+    if (index < 0) {
       clearHover();
       return;
     }
-    if (index !== hoveredIndex) {
-      if (hoveredIndex !== null) bars[hoveredIndex]?.classList.remove("is-hovered");
-      bars[index].classList.add("is-hovered");
-      hoveredIndex = index;
-
-      const balance = cumulativeData[index];
-      showChartTooltip({
-        date: chartBars[index].date,
-        endDate: chartBars[index].endDate,
-        hours: data[index],
-        balance,
-        detail: chartBars[index].detail,
-      });
-    }
+    hover(index);
     moveChartTooltip(event.clientX, event.clientY);
   });
-  svg.addEventListener("pointerleave", clearHover);
-  svg.addEventListener("pointerdown", clearHover);
+  svg.addEventListener("pointerleave", (event) => {
+    if (!isTouch(event)) clearHover();
+  });
+  svg.addEventListener("pointerdown", (event) => {
+    if (!isTouch(event)) clearHover();
+  });
+
+  chartHover = {
+    touch(clientX, clientY, toggle) {
+      const index = barAt(clientX);
+      if (index < 0 || (toggle && index === hoveredIndex)) {
+        clearHover();
+        return;
+      }
+      hover(index);
+      touchTooltipOpen = true;
+      // Above the bar and the balance line, clear of the finger.
+      const top = Math.min(Number(bars[index].getAttribute("y")), padding.top + chartHeight / 2);
+      moveChartTooltip(
+        clientX,
+        Math.min(clientY - 24, svg.getBoundingClientRect().top + top),
+        true,
+      );
+    },
+    clear: clearHover,
+  };
 
   return svg;
 }
@@ -1533,17 +1617,19 @@ function showChartTooltip({
   tooltip.classList.add("is-visible");
 }
 
-function moveChartTooltip(clientX: number, clientY: number) {
+function moveChartTooltip(clientX: number, clientY: number, centered = false) {
   if (!tooltipElement) return;
   const offset = 14;
   const { width, height } = tooltipElement.getBoundingClientRect();
   let left = clientX + offset;
-  if (left + width > window.innerWidth - 8) left = clientX - offset - width;
+  if (centered) left = Math.min(clientX - width / 2, window.innerWidth - width - 8);
+  else if (left + width > window.innerWidth - 8) left = clientX - offset - width;
   const top = Math.min(Math.max(8, clientY - height - offset), window.innerHeight - height - 8);
   tooltipElement.style.left = `${Math.max(8, left)}px`;
   tooltipElement.style.top = `${top}px`;
 }
 
 function hideChartTooltip() {
+  touchTooltipOpen = false;
   tooltipElement?.classList.remove("is-visible");
 }
