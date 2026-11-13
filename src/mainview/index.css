@@ -1361,6 +1361,7 @@ input[type="checkbox"] {
 }
 
 .timer-button[hidden],
+.timer-start-edit[hidden],
 .timer-discard[hidden],
 .icon-button[hidden] {
   display: none;
@@ -1424,9 +1425,14 @@ input[type="checkbox"] {
   clip-path: polygon(0 0, 100% 50%, 0 100%);
 }
 
+.toolbar-trailing .timer-start-edit,
 .toolbar-trailing .timer-discard {
   height: 30px;
   border-radius: 15px;
+}
+
+.timer-start-edit {
+  font-variant-numeric: tabular-nums;
 }
 
 .timer-discard.is-confirming {

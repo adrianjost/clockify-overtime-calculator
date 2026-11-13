@@ -165,10 +165,21 @@ body.web {
   height: 16px;
 }
 
+.timer-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: -8px;
+}
+
+.timer-actions:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
+.web .timer-start-edit,
 .web .timer-discard {
+  flex: 1;
   justify-content: center;
   height: 40px;
-  margin-top: -8px;
   border-radius: 12px;
   font-size: 15px;
 }

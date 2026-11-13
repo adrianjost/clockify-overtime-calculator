@@ -65,6 +65,7 @@ const SIDEBAR_MIN_WIDTH = 40 + 420 + 16 + 280;
 export function initializeTracking({ alwaysShowEntries = false, assumeEnabled = false } = {}) {
   const timerButton = el<HTMLButtonElement>("#timer-button");
   const discardButton = el<HTMLButtonElement>("#timer-discard");
+  const startEditButton = el<HTMLButtonElement>("#timer-start-edit");
   // The app shows the entries in a sidebar that can be turned off; the web page always shows them.
   const entriesToggle = document.querySelector<HTMLButtonElement>("#entries-toggle");
   const sidebar = document.querySelector<HTMLElement>("#entries-sidebar");
@@ -103,6 +104,7 @@ export function initializeTracking({ alwaysShowEntries = false, assumeEnabled = 
   function renderTimer() {
     timerButton.hidden = !enabled;
     discardButton.hidden = !enabled || running === null;
+    startEditButton.hidden = !enabled || running === null;
     if (!running) resetDiscard();
     if (entriesToggle) {
       entriesToggle.hidden = !enabled;
@@ -121,6 +123,8 @@ export function initializeTracking({ alwaysShowEntries = false, assumeEnabled = 
       const elapsed = formatDuration(Date.now() - Date.parse(running.start), true);
       timerButton.innerHTML = `<span class="timer-icon timer-icon--stop"></span>${elapsed}`;
       timerButton.title = `Stop timer (started ${timeOfDay(new Date(running.start))})`;
+      startEditButton.textContent = `Started ${timeOfDay(new Date(running.start))}`;
+      startEditButton.title = "Change when the timer started";
     } else {
       timerButton.innerHTML = `<span class="timer-icon timer-icon--start"></span>Start`;
       timerButton.title = "Start timer";
@@ -145,6 +149,11 @@ export function initializeTracking({ alwaysShowEntries = false, assumeEnabled = 
     } finally {
       timerButton.disabled = false;
     }
+  });
+
+  // For when the timer was started late: correct its start without stopping it.
+  startEditButton.addEventListener("click", () => {
+    if (running) openEditor(running);
   });
 
   let confirmDiscard: ReturnType<typeof setTimeout> | null = null;
@@ -307,7 +316,8 @@ export function initializeTracking({ alwaysShowEntries = false, assumeEnabled = 
     editing = entry;
     const start = entry ? new Date(entry.start) : new Date(Date.now() - 60 * MINUTE);
     const end = entry ? (entry.end ? new Date(entry.end) : null) : new Date();
-    dialogTitle.textContent = entry ? "Edit time entry" : "Add time entry";
+    dialogTitle.textContent =
+      entry?.end === null ? "Running timer" : entry ? "Edit time entry" : "Add time entry";
     dateInput.value = isoDate(start);
     startInput.value = inputTime(start);
     endInput.value = end ? inputTime(end) : "";
@@ -344,6 +354,10 @@ export function initializeTracking({ alwaysShowEntries = false, assumeEnabled = 
     if (!times) return;
     if (times.end && times.end.getTime() > Date.now() + MINUTE) {
       errorLabel.textContent = "The end can't be in the future.";
+      return;
+    }
+    if (!times.end && times.start.getTime() > Date.now() + MINUTE) {
+      errorLabel.textContent = "The start can't be in the future.";
       return;
     }
     void run(() =>
