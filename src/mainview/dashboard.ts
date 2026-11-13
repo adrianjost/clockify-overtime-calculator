@@ -756,8 +756,8 @@ function setupChartInteraction(container: HTMLDivElement): void {
   }
 
   let pinchBase: DayRange | null = null;
-  // Touch points on the chart, by pointer ID, with their x position.
-  const touches = new Map<number, number>();
+  // Touch points on the chart, by pointer ID.
+  const touches = new Map<number, { x: number; y: number }>();
 
   // Ctrl/⌘ + wheel zooms, Shift + wheel pans, a horizontal trackpad swipe pans.
   container.addEventListener(
@@ -928,6 +928,15 @@ function setupChartInteraction(container: HTMLDivElement): void {
     dispatchRerender();
   });
 
+  // touch-action alone doesn't stop every mobile browser from zooming the page when a pinch
+  // starts on the chart (e.g. with one finger just outside it), so cancel the browser's own
+  // handling of multi-finger touches here; the pointer events below still arrive.
+  const blockBrowserPinch = (e: TouchEvent) => {
+    if (e.touches.length > 1) e.preventDefault();
+  };
+  container.addEventListener("touchstart", blockBrowserPinch, { passive: false });
+  container.addEventListener("touchmove", blockBrowserPinch, { passive: false });
+
   // One finger or the mouse drags to pan when zoomed in; two fingers pinch to zoom and pan.
   let touchPinch: { base: DayRange; day: number; distance: number } | null = null;
 
@@ -945,14 +954,15 @@ function setupChartInteraction(container: HTMLDivElement): void {
   }
 
   function touchPair(): { mid: number; distance: number } {
-    const [a = 0, b = 0] = touches.values();
-    return { mid: (a + b) / 2, distance: Math.max(1, Math.abs(a - b)) };
+    // The distance counts in any direction: fingers are often spread vertically or diagonally.
+    const [a = { x: 0, y: 0 }, b = { x: 0, y: 0 }] = touches.values();
+    return { mid: (a.x + b.x) / 2, distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)) };
   }
 
   container.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
     if (e.pointerType === "touch") {
-      touches.set(e.pointerId, e.clientX);
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
       container.setPointerCapture(e.pointerId);
       if (touches.size === 2) {
         const len = lastFilledData.length;
@@ -972,7 +982,7 @@ function setupChartInteraction(container: HTMLDivElement): void {
   });
 
   container.addEventListener("pointermove", (e) => {
-    if (touches.has(e.pointerId)) touches.set(e.pointerId, e.clientX);
+    if (touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const len = lastFilledData.length;
     if (touchPinch && touches.size >= 2) {
       const { base, day, distance } = touchPinch;
@@ -999,7 +1009,7 @@ function setupChartInteraction(container: HTMLDivElement): void {
       // The finger still down continues as a drag.
       const [rest] = touches.values();
       if (rest !== undefined) {
-        startDrag(rest);
+        startDrag(rest.x);
         return;
       }
     }
