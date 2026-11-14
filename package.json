@@ -13,8 +13,8 @@
   },
   "devDependencies": {
     "@types/bun": "1.4.4",
-    "oxfmt": "0.42.0",
-    "typescript": "5.9.3"
+    "oxfmt": "0.78.0",
+    "typescript": "7.0.2"
   },
   "overrides": {
     "tinypool": "2.2.0"
