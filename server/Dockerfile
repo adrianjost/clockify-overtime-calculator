@@ -1,11 +1,11 @@
 # Build context is the repository root:
-#   docker build -f server/Dockerfile -t ghcr.io/adrianjost/clockify-overtime-calculator-server .
+#   docker build -f server/Dockerfile -t ghcr.io/adrianjost/tickover-server .
 # The web page is the same on every platform, so it is built natively.
 FROM --platform=$BUILDPLATFORM oven/bun:1.4.4-alpine@sha256:4cf82f5686b196504fe119db3fcd9185b191f82ece82c40680e597228ec6070a AS web
 WORKDIR /src
 COPY src ./src
-COPY macos/ClockifyOvertime/Assets.xcassets/AppIcon.appiconset/icon_256x256@2x.png ./icon.png
-COPY macos/ClockifyOvertime/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png ./icon-256.png
+COPY macos/Tickover/Assets.xcassets/AppIcon.appiconset/icon_256x256@2x.png ./icon.png
+COPY macos/Tickover/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png ./icon-256.png
 RUN bun build src/web/index.ts --target=browser --outdir=/public \
   && cp src/web/index.html src/web/theme.js src/web/web.css src/web/manifest.json src/web/sw.js \
     src/mainview/index.css icon.png icon-256.png /public/ \

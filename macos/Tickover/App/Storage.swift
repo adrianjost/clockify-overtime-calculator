@@ -3,7 +3,7 @@ import Security
 
 enum Paths {
   static let stateDirectory = FileManager.default.homeDirectoryForCurrentUser
-    .appendingPathComponent(".clockify-overtime", isDirectory: true)
+    .appendingPathComponent(".tickover", isDirectory: true)
   static let preferences = stateDirectory.appendingPathComponent("preferences.json")
   static let timeEntryCache = stateDirectory.appendingPathComponent("time-entries-cache.json")
 }
@@ -58,7 +58,7 @@ struct Preferences: Codable {
 }
 
 enum Keychain {
-  private static let service = "dev.adrianjost.clockify-overtime"
+  private static let service = "dev.adrianjost.tickover"
   private static let apiKeyAccount = "clockify-api-key"
   private static let serverTokenAccount = "server-token"
 

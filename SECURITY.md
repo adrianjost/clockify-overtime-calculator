@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please report security problems privately through
-[GitHub's private vulnerability reporting](https://github.com/adrianjost/clockify-overtime-calculator/security/advisories/new),
+[GitHub's private vulnerability reporting](https://github.com/adrianjost/tickover/security/advisories/new),
 not in a public issue. You'll get an answer within a week.
 
 ## Running the server safely

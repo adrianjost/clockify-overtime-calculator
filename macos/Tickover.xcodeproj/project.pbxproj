@@ -7,13 +7,13 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		C0FFEE000000000000000001 /* Surplus.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Surplus.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		C0FFEE000000000000000001 /* Tickover.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Tickover.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		C0FFEE000000000000000002 /* ClockifyOvertime */ = {
+		C0FFEE000000000000000002 /* Tickover */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = ClockifyOvertime;
+			path = Tickover;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -32,7 +32,7 @@
 		C0FFEE000000000000000004 = {
 			isa = PBXGroup;
 			children = (
-				C0FFEE000000000000000002 /* ClockifyOvertime */,
+				C0FFEE000000000000000002 /* Tickover */,
 				C0FFEE000000000000000005 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -40,7 +40,7 @@
 		C0FFEE000000000000000005 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				C0FFEE000000000000000001 /* Surplus.app */,
+				C0FFEE000000000000000001 /* Tickover.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -48,9 +48,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		C0FFEE000000000000000006 /* ClockifyOvertime */ = {
+		C0FFEE000000000000000006 /* Tickover */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = C0FFEE000000000000000010 /* Build configuration list for PBXNativeTarget "ClockifyOvertime" */;
+			buildConfigurationList = C0FFEE000000000000000010 /* Build configuration list for PBXNativeTarget "Tickover" */;
 			buildPhases = (
 				C0FFEE000000000000000007 /* Sources */,
 				C0FFEE000000000000000003 /* Frameworks */,
@@ -62,13 +62,13 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				C0FFEE000000000000000002 /* ClockifyOvertime */,
+				C0FFEE000000000000000002 /* Tickover */,
 			);
-			name = ClockifyOvertime;
+			name = Tickover;
 			packageProductDependencies = (
 			);
-			productName = ClockifyOvertime;
-			productReference = C0FFEE000000000000000001 /* Surplus.app */;
+			productName = Tickover;
+			productReference = C0FFEE000000000000000001 /* Tickover.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -86,7 +86,7 @@
 					};
 				};
 			};
-			buildConfigurationList = C0FFEE00000000000000000B /* Build configuration list for PBXProject "ClockifyOvertime" */;
+			buildConfigurationList = C0FFEE00000000000000000B /* Build configuration list for PBXProject "Tickover" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -100,7 +100,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				C0FFEE000000000000000006 /* ClockifyOvertime */,
+				C0FFEE000000000000000006 /* Tickover */,
 			);
 		};
 /* End PBXProject section */
@@ -198,7 +198,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Surplus;
+				INFOPLIST_KEY_CFBundleDisplayName = Tickover;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSUIElement = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -208,9 +208,9 @@
 				MARKETING_VERSION = 0.1.0;
 				ENABLE_DEBUG_DYLIB = NO;
 				OTHER_CODE_SIGN_FLAGS = "--requirements $(SRCROOT)/DebugSigning.req";
-				PRODUCT_BUNDLE_IDENTIFIER = "dev.adrianjost.clockify-overtime";
-				PRODUCT_MODULE_NAME = ClockifyOvertime;
-				PRODUCT_NAME = Surplus;
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.adrianjost.tickover";
+				PRODUCT_MODULE_NAME = Tickover;
+				PRODUCT_NAME = Tickover;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -229,7 +229,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Surplus;
+				INFOPLIST_KEY_CFBundleDisplayName = Tickover;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_LSUIElement = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -237,9 +237,9 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "dev.adrianjost.clockify-overtime";
-				PRODUCT_MODULE_NAME = ClockifyOvertime;
-				PRODUCT_NAME = Surplus;
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.adrianjost.tickover";
+				PRODUCT_MODULE_NAME = Tickover;
+				PRODUCT_NAME = Tickover;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -250,7 +250,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		C0FFEE00000000000000000B /* Build configuration list for PBXProject "ClockifyOvertime" */ = {
+		C0FFEE00000000000000000B /* Build configuration list for PBXProject "Tickover" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				C0FFEE00000000000000000C /* Debug */,
@@ -259,7 +259,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		C0FFEE000000000000000010 /* Build configuration list for PBXNativeTarget "ClockifyOvertime" */ = {
+		C0FFEE000000000000000010 /* Build configuration list for PBXNativeTarget "Tickover" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				C0FFEE00000000000000000E /* Debug */,
