@@ -20,4 +20,5 @@ enum LaunchAtLogin {
     guard let event = NSAppleEventManager.shared().currentAppleEvent else { return false }
     return event.eventID == kAEOpenApplication
       && event.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == launchedAsLoginItem
-  }}
+  }
+}
