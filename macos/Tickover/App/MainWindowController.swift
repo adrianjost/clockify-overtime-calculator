@@ -39,7 +39,7 @@ final class MainWindowController: NSObject, NSWindowDelegate, WKScriptMessageHan
       backing: .buffered,
       defer: false
     )
-    window.title = "Surplus"
+    window.title = "Tickover"
     window.titleVisibility = .hidden
     window.titlebarAppearsTransparent = true
     window.minSize = Self.minSize

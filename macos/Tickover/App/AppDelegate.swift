@@ -46,12 +46,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     appMenu.addItem(.separator())
     appMenu.addItem(
       NSMenuItem(
-        title: "Hide Surplus", action: #selector(NSApplication.hide(_:)),
+        title: "Hide Tickover", action: #selector(NSApplication.hide(_:)),
         keyEquivalent: "h"))
     appMenu.addItem(.separator())
     appMenu.addItem(
       NSMenuItem(
-        title: "Quit Surplus", action: #selector(NSApplication.terminate(_:)),
+        title: "Quit Tickover", action: #selector(NSApplication.terminate(_:)),
         keyEquivalent: "q"))
     mainMenu.addItem(Self.submenuItem(appMenu))
 

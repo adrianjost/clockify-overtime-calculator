@@ -2,6 +2,6 @@
 *
 !src
 !server/server.ts
-!macos/ClockifyOvertime/Assets.xcassets/AppIcon.appiconset/icon_256x256@2x.png
-!macos/ClockifyOvertime/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png
+!macos/Tickover/Assets.xcassets/AppIcon.appiconset/icon_256x256@2x.png
+!macos/Tickover/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png
 !server/entrypoint.sh

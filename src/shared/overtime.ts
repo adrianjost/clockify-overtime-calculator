@@ -1,6 +1,6 @@
 import type { OvertimeData, TrackedEntry } from "./rpc.ts";
 
-// Mirrors macos/ClockifyOvertime/Clockify/OvertimeReport.swift for the web UI.
+// Mirrors macos/Tickover/Clockify/OvertimeReport.swift for the web UI.
 
 const WORKDAY_SECONDS = 8 * 3600;
 

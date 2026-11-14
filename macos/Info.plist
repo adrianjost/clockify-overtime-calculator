@@ -10,6 +10,6 @@
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Surplus connects to your self-hosted time tracking server.</string>
+	<string>Tickover connects to your self-hosted time tracking server.</string>
 </dict>
 </plist>

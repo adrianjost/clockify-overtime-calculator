@@ -1,6 +1,6 @@
 services:
   time-tracking:
-    image: ghcr.io/adrianjost/clockify-overtime-calculator-server:latest
+    image: ghcr.io/adrianjost/tickover-server:latest
     restart: unless-stopped
     ports:
       - "8787:8080"

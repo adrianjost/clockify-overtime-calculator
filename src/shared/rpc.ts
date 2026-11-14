@@ -23,7 +23,7 @@ export interface TrackedEntry {
   labels?: string[];
 }
 
-// Requests handled by the native app, see macos/ClockifyOvertime/App/AppController.swift.
+// Requests handled by the native app, see macos/Tickover/App/AppController.swift.
 export type AppRequests = {
   analyzeOvertime: {
     params: { apiKey: string; startDate: string; endDate: string };

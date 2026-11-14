@@ -6,7 +6,7 @@ import { join } from "node:path";
 
 const projectRoot = import.meta.dir + "/..";
 const logoSvgPath = join(projectRoot, "icon-source.svg");
-const iconsetDir = join(projectRoot, "macos/ClockifyOvertime/Assets.xcassets/AppIcon.appiconset");
+const iconsetDir = join(projectRoot, "macos/Tickover/Assets.xcassets/AppIcon.appiconset");
 
 // Create directories
 mkdirSync(iconsetDir, { recursive: true });

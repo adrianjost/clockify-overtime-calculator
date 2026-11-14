@@ -1,14 +1,14 @@
 <p align="center">
-  <img src="macos/ClockifyOvertime/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png" width="128" height="128" alt="Surplus icon" />
+  <img src="macos/Tickover/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png" width="128" height="128" alt="Tickover icon" />
 </p>
 
-<h1 align="center">Surplus</h1>
+<h1 align="center">Tickover</h1>
 
 <p align="center">Track your working time and always know how much overtime you have banked.</p>
 
-Surplus is a native macOS menu bar app with a self-hosted server and an installable web app for your
-phone. Track time yourself, or read your entries from Clockify. Surplus was called Clockify Overtime
-before.
+Tickover is a native macOS menu bar app with a self-hosted server and an installable web app for your
+phone. Track time yourself, or read your entries from Clockify. Tickover was called Surplus and,
+before that, Clockify Overtime; see "Upgrading from Surplus" below.
 
 ## Features
 
@@ -23,18 +23,18 @@ before.
 ## How it works
 
 - `macos/`: the native app (Swift, AppKit). It owns the menu bar item, the window, the Keychain,
-  launch at login, and fetching/caching Clockify time entries (`macos/ClockifyOvertime/Clockify`).
+  launch at login, and fetching/caching Clockify time entries (`macos/Tickover/Clockify`).
 - `src/mainview/`: the dashboard UI (HTML/CSS/TypeScript), shown in a `WKWebView`. It talks to the
   native app through `src/mainview/bridge.ts`; the available requests are typed in `src/shared/rpc.ts`.
 
 - `server/`: the optional self-hosted time tracking server (Bun + SQLite, run with Docker Compose).
-  The app talks to it in `macos/ClockifyOvertime/TimeTracking`. It also serves a mobile web UI
+  The app talks to it in `macos/Tickover/TimeTracking`. It also serves a mobile web UI
   (`src/web/`), which reuses the dashboard's views with an HTTP transport instead of the native bridge.
 
 The Xcode build bundles the web UI with Bun (`scripts/build-web.sh`), so the app has no runtime
 dependencies.
 
-App data lives in `~/.clockify-overtime/` (preferences and a time entry cache).
+App data lives in `~/.tickover/` (preferences and a time entry cache).
 
 ## Prerequisites
 
@@ -53,7 +53,7 @@ This installs dev dependencies and the pre-commit hook (formatting via oxfmt).
 
 ## Run (Development)
 
-Open `macos/ClockifyOvertime.xcodeproj` in Xcode and press Run.
+Open `macos/Tickover.xcodeproj` in Xcode and press Run.
 
 Debug builds enable the Web Inspector for the dashboard (Safari → Develop menu).
 
@@ -63,7 +63,7 @@ Debug builds enable the Web Inspector for the dashboard (Safari → Develop menu
 bun run build
 ```
 
-The app is written to `build/DerivedData/Build/Products/Release/Surplus.app`.
+The app is written to `build/DerivedData/Build/Products/Release/Tickover.app`.
 
 Other commands:
 
@@ -76,8 +76,7 @@ Other commands:
 
 There are no prebuilt downloads, so build the app yourself (see Prerequisites and Build), then:
 
-1. Move `Surplus.app` from `build/DerivedData/Build/Products/Release/` to `/Applications`. If you
-   have the older `Clockify Overtime.app` there, quit and delete it; Surplus keeps its settings.
+1. Move `Tickover.app` from `build/DerivedData/Build/Products/Release/` to `/Applications`.
 2. Open it. On first launch it asks where your time entries are. The self-hosted server is preselected
    (see "Self-hosted time tracking" below); to read from Clockify instead, choose Clockify.
 3. Create a Clockify API key: in Clockify, open your profile menu → Preferences → Advanced →
@@ -88,6 +87,20 @@ There are no prebuilt downloads, so build the app yourself (see Prerequisites an
    you like.
 
 To update, pull the latest changes, build again and replace the app in `/Applications`.
+
+### Upgrading from Surplus
+
+Tickover is a new app as far as macOS is concerned, so it starts without your old settings:
+
+1. Quit `Surplus.app` (or `Clockify Overtime.app`), turn off Open at login in its settings first if
+   it was on, and delete it from `/Applications`.
+2. Keep your settings and cache: `mv ~/.clockify-overtime ~/.tickover`
+3. Open Tickover and enter the Clockify API key or sign in to your server again; those are stored
+   in the Keychain under the old app's name and are not carried over.
+
+For the server, change the image in your `docker-compose.yml` to
+`ghcr.io/adrianjost/tickover-server:latest`, then run `docker compose pull && docker compose up -d`.
+The data folder and the accounts stay as they are.
 
 ## Self-hosted time tracking
 
@@ -100,11 +113,11 @@ You only need Docker and the Compose file, not the repo. On the machine:
 
 ```sh
 mkdir time-tracking && cd time-tracking
-curl -fsSLO https://raw.githubusercontent.com/adrianjost/clockify-overtime-calculator/main/server/docker-compose.yml
+curl -fsSLO https://raw.githubusercontent.com/adrianjost/tickover/main/server/docker-compose.yml
 docker compose up -d
 ```
 
-This runs the prebuilt image `ghcr.io/adrianjost/clockify-overtime-calculator-server` (for x86 and
+This runs the prebuilt image `ghcr.io/adrianjost/tickover-server` (for x86 and
 ARM). It is rebuilt on every change to `main`. On a NAS you can also paste the Compose file into its
 container manager.
 
@@ -125,7 +138,7 @@ docker compose pull && docker compose up -d
 To build the image yourself instead, run this in the repo and then `docker compose up -d` as above:
 
 ```sh
-docker build -f server/Dockerfile -t ghcr.io/adrianjost/clockify-overtime-calculator-server .
+docker build -f server/Dockerfile -t ghcr.io/adrianjost/tickover-server .
 ```
 
 ### Accounts

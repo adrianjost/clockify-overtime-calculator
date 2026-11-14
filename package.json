@@ -1,11 +1,11 @@
 {
-  "name": "clockify-overtime",
+  "name": "tickover",
   "version": "0.1.0",
   "private": true,
-  "description": "Surplus: track your working time and see your overtime balance on the Mac and the web",
+  "description": "Tickover: track your working time and see your overtime balance on the Mac and the web",
   "scripts": {
     "setup": "bun install && bash scripts/setup-hooks.sh",
-    "build": "xcodebuild -project macos/ClockifyOvertime.xcodeproj -scheme ClockifyOvertime -configuration Release -derivedDataPath build/DerivedData build",
+    "build": "xcodebuild -project macos/Tickover.xcodeproj -scheme Tickover -configuration Release -derivedDataPath build/DerivedData build",
     "format": "oxfmt --write",
     "typecheck": "tsc --noEmit -p .",
     "generate-icons": "bun scripts/generate-icons.ts",

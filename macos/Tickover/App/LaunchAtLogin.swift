@@ -2,6 +2,7 @@ import AppKit
 import ServiceManagement
 
 enum LaunchAtLogin {
+  // Written by early versions, back when the app was called Clockify Overtime.
   private static let legacyLaunchAgent = FileManager.default.homeDirectoryForCurrentUser
     .appendingPathComponent("Library/LaunchAgents/dev.adrianjost.clockify-overtime.plist")
 

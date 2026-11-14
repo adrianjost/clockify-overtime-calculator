@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE: ghcr.io/adrianjost/clockify-overtime-calculator-server
+  IMAGE: ghcr.io/adrianjost/tickover-server
 
 jobs:
   check:
