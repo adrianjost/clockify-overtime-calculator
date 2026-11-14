@@ -7,8 +7,7 @@
 <p align="center">Track your working time and always know how much overtime you have banked.</p>
 
 Tickover is a native macOS menu bar app with a self-hosted server and an installable web app for your
-phone. Track time yourself, or read your entries from Clockify. Tickover was called Surplus and,
-before that, Clockify Overtime; see "Upgrading from Surplus" below.
+phone. Track time yourself, or read your entries from Clockify.
 
 ## Features
 
@@ -87,20 +86,6 @@ There are no prebuilt downloads, so build the app yourself (see Prerequisites an
    you like.
 
 To update, pull the latest changes, build again and replace the app in `/Applications`.
-
-### Upgrading from Surplus
-
-Tickover is a new app as far as macOS is concerned, so it starts without your old settings:
-
-1. Quit `Surplus.app` (or `Clockify Overtime.app`), turn off Open at login in its settings first if
-   it was on, and delete it from `/Applications`.
-2. Keep your settings and cache: `mv ~/.clockify-overtime ~/.tickover`
-3. Open Tickover and enter the Clockify API key or sign in to your server again; those are stored
-   in the Keychain under the old app's name and are not carried over.
-
-For the server, change the image in your `docker-compose.yml` to
-`ghcr.io/adrianjost/tickover-server:latest`, then run `docker compose pull && docker compose up -d`.
-The data folder and the accounts stay as they are.
 
 ## Self-hosted time tracking
 

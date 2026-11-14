@@ -27,7 +27,6 @@ final class AppController {
   private var activeApiKey: String? { dataSource == .clockify ? currentApiKey : nil }
 
   func start(launchedAtLogin: Bool) {
-    LaunchAtLogin.migrateLegacyLaunchAgent()
     applyTheme()
     server = Self.loadServer(preferences)
     if preferences.dataSource == nil {
